@@ -10,6 +10,8 @@ A lightweight, self-hosted web application designed to run on a Raspberry Pi. It
 * **Fiestaboard Integration:** Easily pause/resume your Fiestaboard server during gameplay so it doesn't overwrite your scores.
 * **Browser-Based Config:** Set your IP and API keys directly from the web UI (no terminal editing required).
 
+<img width="200" alt="Scoreboard Setup" src="./screenshots/IMG_2600.jpeg" /> <img width="200" alt="Settings" src="./screenshots/IMG_2599.jpeg" /> <img width="200" alt="Player Details" src="./screenshots/IMG_2601.jpeg" /> <img width="200" alt="Score Entry" src="./screenshots/IMG_2603.jpeg" />
+
 ## Prerequisites
 * A Raspberry Pi (or any Linux-based machine)
 * Python 3 installed

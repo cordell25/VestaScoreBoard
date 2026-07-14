@@ -92,10 +92,22 @@ sudo systemctl start fiestaboard-webapp
 
 **Useful Troubleshooting Commands**
 If you ever need to troubleshoot the background service, use these commands:
-Check status: sudo systemctl status fiestaboard-webapp (press q to exit the log view)
-Restart app: sudo systemctl restart fiestaboard-webapp
-Stop app: sudo systemctl stop fiestaboard-webapp
-View recent errors: sudo journalctl -u fiestaboard-webapp -n 20
+Check status: 
+```
+sudo systemctl status fiestaboard-webapp (press q to exit the log view)
+```
+Restart app: 
+```
+sudo systemctl restart fiestaboard-webapp
+```
+Stop app: 
+```
+sudo systemctl stop fiestaboard-webapp
+```
+View recent errors: 
+```
+sudo journalctl -u fiestaboard-webapp -n 20
+```
 
 ## Pro-Tip: Setting a Static IP
 

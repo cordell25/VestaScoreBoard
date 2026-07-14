@@ -8,13 +8,17 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f4f4f9; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
         
-        .header-container { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-        .header-text { flex-grow: 1; text-align: center; margin-left: 40px; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header-text { flex-grow: 1; text-align: center; }
         h1 { margin: 0 0 5px 0; }
         .subtitle { color: #666; font-size: 14px; margin: 0; }
         
         .settings-btn { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; }
         .settings-btn:hover { opacity: 0.9; }
+
+        .pause-btn { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; min-width: 45px; transition: background-color 0.2s; }
+        .pause-btn:disabled { opacity: 0.3; cursor: not-allowed; background: #6c757d !important; }
+        .pause-btn:hover:not(:disabled) { opacity: 0.9; }
 
         .grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
         
@@ -43,6 +47,7 @@
 
     <div id="main-screen">
         <div class="header-container">
+            <button id="global-pause-btn" class="pause-btn" onclick="togglePause()" disabled title="Setup a Fiestaboard in settings to use">⏸️</button>
             <div class="header-text">
                 <h1>Fiestaboard Central</h1>
                 <p class="subtitle">Select an app to launch</p>
@@ -69,7 +74,6 @@
         </div>
     </div>
 
-    <!-- SETTINGS SCREEN -->
     <div id="settings-screen" class="card hidden">
         <h2>Global Settings</h2>
         
@@ -100,19 +104,108 @@
 
     <script>
         let isInitialSetup = false;
+        let activeBoardUuid = '';
+        let isAutomationPaused = false;
+
+        // Initialize configuration and check automation status on startup
+        document.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+
+        function initApp() {
+            fetch('/api/config')
+                .then(res => res.json())
+                .then(configData => {
+                    activeBoardUuid = configData.fiestaboard_uuid || '';
+                    if (activeBoardUuid) {
+                        getPauseStatus();
+                    } else {
+                        updatePauseButtonUI(null); // Keep disabled
+                    }
+                })
+                .catch(err => console.error("Error fetching config on initialization:", err));
+        }
+
+        function getPauseStatus() {
+            fetch('http://fiestapi.local:4420/api/settings/board')
+                .then(res => res.json())
+                .then(data => {
+                    const boardsList = data.boards || (data.settings && data.settings.boards) || [];
+                    const matchedBoard = boardsList.find(b => b.id === activeBoardUuid);
+                    
+                    if (matchedBoard) {
+                        isAutomationPaused = matchedBoard.paused;
+                        updatePauseButtonUI(isAutomationPaused);
+                    } else {
+                        updatePauseButtonUI(null);
+                    }
+                })
+                .catch(err => {
+                    console.error("Error reaching fiestapi for status check:", err);
+                    updatePauseButtonUI(null);
+                });
+        }
+
+        function togglePause() {
+            if (!activeBoardUuid) return;
+            
+            const btn = document.getElementById('global-pause-btn');
+            btn.disabled = true; // Temporary bounce protection
+
+            const nextState = !isAutomationPaused;
+
+            fetch(`http://fiestapi.local:4420/api/settings/board/${activeBoardUuid}/pause`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paused: nextState })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' || data.paused !== undefined) {
+                    isAutomationPaused = data.paused;
+                    updatePauseButtonUI(isAutomationPaused);
+                }
+            })
+            .catch(err => {
+                console.error("Failed to toggle pause endpoint:", err);
+                alert("Could not update pause status. Verify network connectivity to fiestapi.local.");
+                btn.disabled = false;
+            });
+        }
+
+        function updatePauseButtonUI(pausedState) {
+            const btn = document.getElementById('global-pause-btn');
+            
+            if (pausedState === null) {
+                btn.disabled = true;
+                btn.innerText = '⏸️';
+                btn.style.backgroundColor = '#6c757d';
+                btn.title = 'Setup a Fiestaboard in settings to use';
+                return;
+            }
+
+            btn.disabled = false;
+            btn.title = pausedState ? 'Automation is Paused. Click to Resume.' : 'Automation is Running. Click to Pause.';
+            
+            if (pausedState) {
+                btn.innerText = '▶️'; // Play icon displays when you want to resume
+                btn.style.backgroundColor = '#dc3545'; // Warning red showing it's stopped
+            } else {
+                btn.innerText = '⏸️'; // Pause icon displays when you want to freeze it
+                btn.style.backgroundColor = '#28a745'; // Safe green showing it's active
+            }
+        }
 
         function openSettings() {
             document.getElementById('main-screen').classList.add('hidden');
             document.getElementById('settings-screen').classList.remove('hidden');
             
-            // Fetch saved configuration
             fetch('/api/config')
                 .then(res => res.json())
                 .then(configData => {
                     document.getElementById('cfg-ip').value = configData.vestaboard_ip || '';
                     document.getElementById('cfg-key').value = configData.local_api_key || '';
                     
-                    // Check if they need to do the initial setup first
                     if (!configData.vestaboard_ip || !configData.local_api_key) {
                         isInitialSetup = true;
                         
@@ -140,13 +233,10 @@
             uuidSelect.innerHTML = '<option value="">Loading boards...</option>';
             timerSelect.innerHTML = '<option value="">Loading pages...</option>';
             
-            // Fetch Boards
             fetch('/api/proxy/boards')
                 .then(res => res.json())
                 .then(data => {
                     uuidSelect.innerHTML = '<option value="">None (Optional)</option>';
-                    
-                    // Dig into the object to find the 'boards' array
                     const boardsList = data.boards || [];
                     
                     boardsList.forEach(board => {
@@ -161,13 +251,10 @@
                     uuidSelect.innerHTML = '<option value="">Error loading boards</option>';
                 });
 
-            // Fetch Pages
             fetch('/api/proxy/pages')
                 .then(res => res.json())
                 .then(data => {
                     timerSelect.innerHTML = '<option value="">None (Optional)</option>';
-                    
-                    // Safely check for an array directly, or inside 'pages'/'data'
                     const pagesList = Array.isArray(data) ? data : (data.pages || data.data || []);
                     
                     pagesList.forEach(page => {
@@ -187,6 +274,7 @@
             document.getElementById('settings-screen').classList.add('hidden');
             document.getElementById('main-screen').classList.remove('hidden');
             document.getElementById('settings-status').innerText = "";
+            initApp(); // Refresh local variables and UI button state in case settings changed
         }
 
         function saveSettings() {

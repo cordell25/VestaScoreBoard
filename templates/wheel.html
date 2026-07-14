@@ -10,7 +10,11 @@
         
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .home-btn { width: auto; padding: 8px 15px; font-size: 14px; background: #6c757d; margin: 0; text-decoration: none; color: white; border-radius: 6px; display: inline-block; font-weight: bold; }
-        h1 { margin: 0; flex-grow: 1; text-align: center; padding-right: 80px; font-size: 24px; }
+        h1 { margin: 0; flex-grow: 1; text-align: center; font-size: 24px; }
+        
+        .pause-btn { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; min-width: 45px; transition: background-color 0.2s; }
+        .pause-btn:disabled { opacity: 0.3; cursor: not-allowed; background: #6c757d !important; }
+        .pause-btn:hover:not(:disabled) { opacity: 0.9; }
         
         select { width: 100%; padding: 12px; margin: 15px 0 25px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; background-color: white; }
 
@@ -52,6 +56,7 @@
         <div class="header-bar">
             <a href="/" class="home-btn">🏠 Home</a>
             <h1>Wheel of Fortune</h1>
+            <button id="global-pause-btn" class="pause-btn" onclick="togglePause()" disabled title="Loading...">⏸️</button>
         </div>
 
         <div id="start-screen">
@@ -78,12 +83,10 @@
                 <h3>Vowels</h3>
                 <div class="keyboard" id="vowels"></div>
             </div>
-
             <div class="keyboard-section">
                 <h3>Consonants</h3>
                 <div class="keyboard" id="consonants"></div>
             </div>
-
             <div class="controls">
                 <button class="btn-action solve" onclick="solveGame()">Solve Puzzle</button>
                 <button class="btn-action new" onclick="location.reload()">End / New Game</button>
@@ -92,6 +95,91 @@
     </div>
 
     <script>
+        let activeBoardUuid = '';
+        let isAutomationPaused = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+
+        // --- PAUSE AUTOMATION LOGIC ---
+        function initApp() {
+            fetch('/api/config')
+                .then(res => res.json())
+                .then(configData => {
+                    activeBoardUuid = configData.fiestaboard_uuid || '';
+                    if (activeBoardUuid) {
+                        getPauseStatus();
+                    } else {
+                        updatePauseButtonUI(null); 
+                    }
+                })
+                .catch(err => console.error("Error fetching config:", err));
+        }
+
+        function getPauseStatus() {
+            fetch('http://fiestapi.local:4420/api/settings/board')
+                .then(res => res.json())
+                .then(data => {
+                    const boardsList = data.boards || (data.settings && data.settings.boards) || [];
+                    const matchedBoard = boardsList.find(b => b.id === activeBoardUuid);
+                    
+                    if (matchedBoard) {
+                        isAutomationPaused = matchedBoard.paused;
+                        updatePauseButtonUI(isAutomationPaused);
+                    } else {
+                        updatePauseButtonUI(null);
+                    }
+                })
+                .catch(() => updatePauseButtonUI(null));
+        }
+
+        function togglePause() {
+            if (!activeBoardUuid) return;
+            const btn = document.getElementById('global-pause-btn');
+            btn.disabled = true; 
+            const nextState = !isAutomationPaused;
+
+            fetch(`http://fiestapi.local:4420/api/settings/board/${activeBoardUuid}/pause`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paused: nextState })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' || data.paused !== undefined) {
+                    isAutomationPaused = data.paused;
+                    updatePauseButtonUI(isAutomationPaused);
+                }
+            })
+            .catch(() => {
+                alert("Could not update pause status.");
+                btn.disabled = false;
+            });
+        }
+
+        function updatePauseButtonUI(pausedState) {
+            const btn = document.getElementById('global-pause-btn');
+            if (pausedState === null) {
+                btn.disabled = true;
+                btn.innerText = '⏸️';
+                btn.style.backgroundColor = '#6c757d';
+                btn.title = 'Setup a Fiestaboard in settings to use';
+                return;
+            }
+            btn.disabled = false;
+            btn.title = pausedState ? 'Automation is Paused. Click to Resume.' : 'Automation is Running. Click to Pause.';
+            
+            if (pausedState) {
+                btn.innerText = '▶️';
+                btn.style.backgroundColor = '#dc3545'; 
+            } else {
+                btn.innerText = '⏸️';
+                btn.style.backgroundColor = '#28a745'; 
+            }
+        }
+
+        // --- WHEEL OF FORTUNE LOGIC ---
         function startGame() {
             const cat = document.getElementById('category-select').value;
             const startBtn = document.getElementById('start-btn');
@@ -164,10 +252,10 @@
             .then(res => res.json())
             .then(data => {
                 if (data.found) {
-                    buttonElement.style.backgroundColor = '#28a745'; // Green
+                    buttonElement.style.backgroundColor = '#28a745'; 
                     buttonElement.style.color = '#fff';
                 } else {
-                    buttonElement.style.backgroundColor = '#dc3545'; // Red
+                    buttonElement.style.backgroundColor = '#dc3545'; 
                     buttonElement.style.color = '#fff';
                 }
             });

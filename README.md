@@ -1,4 +1,4 @@
-# VestaScoreBoard
+# Fiestaboard-WebApp
 A self hosted website to interact with a Vestaboard as a live scoreboard
 
 A lightweight, self-hosted web application designed to run on a Raspberry Pi. It provides a mobile-friendly UI to track player scores and instantly updates your Vestaboard in real-time using the Local API. 

@@ -1,4 +1,4 @@
-# Project: Vestaboard Central Hub
+# Project: Fiestaboard WebApp Hub
 # Maintainer: cordell25
 
 from flask import Flask, render_template, request, jsonify
@@ -25,7 +25,7 @@ VB_CHARS = {
 
 def get_config():
     if not os.path.exists(CONFIG_FILE):
-        return {"vestaboard_ip": "", "local_api_key": "", "fiestaboard_uuid": ""}
+        return {"vestaboard_ip": "", "local_api_key": "", "fiestaboard_uuid": "", "timer_page_id": ""}
     with open(CONFIG_FILE, 'r') as f:
         return json.load(f)
 
@@ -34,7 +34,6 @@ def save_config(data):
         json.dump(data, f, indent=4)
 
 # --- PAGE ROUTES ---
-
 @app.route('/')
 def home():
     return render_template('home.html')
@@ -51,8 +50,7 @@ def wheel():
 def timer():
     return render_template('timer.html')
 
-# --- API ROUTES ---
-
+# --- API ROUTES (GLOBAL) ---
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     if request.method == 'POST':
@@ -60,6 +58,7 @@ def handle_config():
         return jsonify({"status": "success", "message": "Settings saved"})
     return jsonify(get_config())
 
+# --- API ROUTES (SCOREBOARD) ---
 @app.route('/update_board', methods=['POST'])
 def update_board():
     cfg = get_config()
@@ -94,18 +93,14 @@ def update_board():
     
     for i, player in enumerate(players):
         if current_row >= rows: break 
-        
         board[current_row][0] = int(player.get('color', 63))
-        
         name = str(player['name']).upper()[:name_max_len]
         for j, char in enumerate(name):
             board[current_row][j + 2] = VB_CHARS.get(char, 0) 
-            
         score_str = str(player['score']).rjust(4)
         score_start_col = cols - 4
         for j, char in enumerate(score_str):
             board[current_row][score_start_col + j] = VB_CHARS.get(char, 0)
-            
         current_row += 1
 
     headers = {'X-Vestaboard-Local-Api-Key': cfg['local_api_key']}
@@ -135,6 +130,59 @@ def toggle_fiestaboard():
         return jsonify({"status": "success", "message": f"Fiestaboard Server {state_text}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- API ROUTES (WHEEL OF FORTUNE) ---
+@app.route('/api/wheel/command', methods=['POST'])
+def wheel_command():
+    try:
+        response = requests.post("http://fiestapi.local:4420/api/plugins/wheeloffortune/receive", json=request.json, timeout=5)
+        response.raise_for_status()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"Wheel command error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/wheel/clear', methods=['POST'])
+def wheel_clear():
+    try:
+        response = requests.post("http://fiestapi.local:4420/api/triggers/clear", timeout=5)
+        response.raise_for_status()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"Wheel clear error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- API ROUTES (TIMER) ---
+@app.route('/api/timer/start', methods=['POST'])
+def timer_start():
+    data = request.json
+    minutes = int(data.get('minutes', 5))
+    cfg = get_config()
+    page_id = cfg.get("timer_page_id")
+
+    # 1. Start the Timer Plugin
+    try:
+        plugin_payload = {"duration": minutes}
+        response1 = requests.post("http://fiestapi.local:4420/api/plugins/timer/receive", json=plugin_payload, timeout=5)
+        response1.raise_for_status()
+    except Exception as e:
+        print(f"Timer plugin error: {e}")
+        return jsonify({"status": "error", "message": f"Failed to start timer logic: {str(e)}"}), 500
+
+    # 2. Trigger the Temporary Override (if a page_id is set)
+    if page_id:
+        try:
+            override_payload = {
+                "duration_minutes": minutes + 2,
+                "page_id": page_id
+            }
+            response2 = requests.post("http://fiestapi.local:4420/api/settings/temporary-override", json=override_payload, timeout=5)
+            response2.raise_for_status()
+        except Exception as e:
+            print(f"Timer override error: {e}")
+            return jsonify({"status": "warning", "message": "Timer started, but failed to set temporary override."}), 500
+
+    return jsonify({"status": "success", "message": f"{minutes}-minute timer started!"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

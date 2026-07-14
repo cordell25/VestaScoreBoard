@@ -96,3 +96,23 @@ Check status: sudo systemctl status fiestaboard-webapp (press q to exit the log 
 Restart app: sudo systemctl restart fiestaboard-webapp
 Stop app: sudo systemctl stop fiestaboard-webapp
 View recent errors: sudo journalctl -u fiestaboard-webapp -n 20
+
+## Pro-Tip: Setting a Static IP
+
+If your router reboots or your Raspberry Pi loses power, your network might assign the Pi a *new* IP address. If this happens, your saved bookmark (e.g., `http://192.168.1.50:5000`) will stop working, and you will have to plug in a monitor or check your router to find the new address.
+
+To prevent this, it is highly recommended to set a **Static IP**. 
+
+### Method 1: Router DHCP Reservation (Recommended)
+The safest way to do this is to tell your router to *always* give the Pi the exact same address.
+1. Log into your home router's admin panel (usually by typing `192.168.1.1` or `10.0.0.1` into your browser).
+2. Look for a setting called **DHCP Reservation**, **IP Address Allocation**, or **Static Leases** (typically found under LAN or Network Setup).
+3. Find your Raspberry Pi in the list of connected devices and assign it a permanent IP address. 
+
+### Method 2: Setting it directly on the Pi
+If you prefer to configure the Pi itself and are using a modern version of Raspberry Pi OS (Bookworm or newer), you can use the built-in network manager tool.
+1. Run this command in your terminal: `sudo nmtui`
+2. Select **Edit a connection** and choose your active WiFi or Ethernet network.
+3. Change the **IPv4 Configuration** from `<Automatic>` to `<Manual>`.
+4. Select `<Show>` next to IPv4 and enter your desired IP address (e.g., `192.168.1.50/24`), your Gateway (your router's IP), and DNS servers (like `8.8.8.8`).
+5. Save, exit, and reboot your Pi.

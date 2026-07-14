@@ -25,8 +25,8 @@ A lightweight, self-hosted web application designed to run on a Raspberry Pi. It
 Open your terminal and clone this project into your home directory:
 ```bash
 cd ~
-git clone [https://github.com/cordell25/VestaScoreBoard.git](https://github.com/cordell25/VestaScoreBoard.git)
-cd VestaScoreBoard
+git clone https://github.com/cordell25/Fiestaboard-WebApp.git
+cd Fiestaboard-WebApp
 ```
 
 **2. Create a Virtual Environment**
@@ -60,20 +60,20 @@ To keep the scoreboard running 24/7 and automatically start when the Pi reboots,
 
 **1. Create the service file:**
 ```
-sudo nano /etc/systemd/system/vestaboard.service
+sudo nano /etc/systemd/system/fiestaboard-webapp.service
 ```
 
 **2. Paste the following configuration:**
 (Note: If your Raspberry Pi username is not _fiesta_, update the User, WorkingDirectory, and ExecStart paths below to match your actual username).
 ```
 [Unit]
-Description=Vestaboard Score Tracker
+Description=Fiestaboard WebApp Hub
 After=network.target
 
 [Service]
 User=fiesta
-WorkingDirectory=/home/fiesta/VestaScoreBoard
-ExecStart=/home/fiesta/VestaScoreBoard/venv/bin/python app.py
+WorkingDirectory=/home/fiesta/Fiestaboard-WebApp
+ExecStart=/home/fiesta/Fiestaboard-WebApp/venv/bin/python app.py
 Restart=always
 RestartSec=3
 
@@ -86,13 +86,13 @@ Save and exit the editor (Press Ctrl+O, Enter, then Ctrl+X).
 Run these commands to apply the new service and turn it on:
 ```
 sudo systemctl daemon-reload
-sudo systemctl enable vestaboard
-sudo systemctl start vestaboard
+sudo systemctl enable fiestaboard-webapp
+sudo systemctl start fiestaboard-webapp
 ```
 
 **Useful Troubleshooting Commands**
 If you ever need to troubleshoot the background service, use these commands:
-Check status: sudo systemctl status vestaboard (press q to exit the log view)
-Restart app: sudo systemctl restart vestaboard
-Stop app: sudo systemctl stop vestaboard
-View recent errors: sudo journalctl -u vestaboard -n 20
+Check status: sudo systemctl status fiestaboard-webapp (press q to exit the log view)
+Restart app: sudo systemctl restart fiestaboard-webapp
+Stop app: sudo systemctl stop fiestaboard-webapp
+View recent errors: sudo journalctl -u fiestaboard-webapp -n 20

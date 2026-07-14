@@ -50,13 +50,31 @@ def wheel():
 def timer():
     return render_template('timer.html')
 
-# --- API ROUTES (GLOBAL) ---
+# --- API ROUTES (GLOBAL CONFIG & PROXIES) ---
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     if request.method == 'POST':
         save_config(request.json)
         return jsonify({"status": "success", "message": "Settings saved"})
     return jsonify(get_config())
+
+@app.route('/api/proxy/pages', methods=['GET'])
+def proxy_pages():
+    try:
+        response = requests.get("http://fiestapi.local:4420/api/pages", timeout=5)
+        response.raise_for_status()
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/proxy/boards', methods=['GET'])
+def proxy_boards():
+    try:
+        response = requests.get("http://fiestapi.local:4420/api/settings/board", timeout=5)
+        response.raise_for_status()
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # --- API ROUTES (SCOREBOARD) ---
 @app.route('/update_board', methods=['POST'])
@@ -160,7 +178,6 @@ def timer_start():
     cfg = get_config()
     page_id = cfg.get("timer_page_id")
 
-    # 1. Start the Timer Plugin
     try:
         plugin_payload = {"duration": minutes}
         response1 = requests.post("http://fiestapi.local:4420/api/plugins/timer/receive", json=plugin_payload, timeout=5)
@@ -169,7 +186,6 @@ def timer_start():
         print(f"Timer plugin error: {e}")
         return jsonify({"status": "error", "message": f"Failed to start timer logic: {str(e)}"}), 500
 
-    # 2. Trigger the Temporary Override (if a page_id is set)
     if page_id:
         try:
             override_payload = {

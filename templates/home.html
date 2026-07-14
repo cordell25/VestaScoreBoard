@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vestaboard Hub</title>
+    <title>Fiestaboard Hub</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f4f4f9; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
         
         .header-container { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
-        .header-text { flex-grow: 1; text-align: center; margin-left: 40px; /* offset for the settings button to keep title centered */ }
+        .header-text { flex-grow: 1; text-align: center; margin-left: 40px; }
         h1 { margin: 0 0 5px 0; }
         .subtitle { color: #666; font-size: 14px; margin: 0; }
         
@@ -27,14 +27,13 @@
         .app-icon { font-size: 32px; margin-bottom: 10px; display: block; }
         .app-title { font-size: 20px; font-weight: bold; margin: 0 0 5px 0; }
         .app-desc { font-size: 14px; color: #666; margin: 0; }
-        .app-card.pending { opacity: 0.6; pointer-events: none; }
 
         /* Settings Menu Styling */
         h2 { text-align: center; margin-top: 0; }
-        label { font-weight: bold; font-size: 14px; color: #555; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        .helper-text { font-size: 12px; color: #666; margin-top: -10px; margin-bottom: 15px; line-height: 1.4; }
-        .btn-success { background: #28a745; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+        label { font-weight: bold; font-size: 14px; color: #555; display: block; margin-top: 10px; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin: 8px 0 5px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        .helper-text { font-size: 12px; color: #666; margin-top: 0px; margin-bottom: 15px; line-height: 1.4; }
+        .btn-success { background: #28a745; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; margin-bottom: 10px; margin-top: 10px; }
         .btn-secondary { background: #6c757d; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
         .hidden { display: none; }
     </style>
@@ -44,7 +43,7 @@
     <div id="main-screen">
         <div class="header-container">
             <div class="header-text">
-                <h1>Vestaboard Central</h1>
+                <h1>Fiestaboard Central</h1>
                 <p class="subtitle">Select an app to launch</p>
             </div>
             <button class="settings-btn" onclick="openSettings()">⚙️</button>
@@ -61,10 +60,10 @@
                 <h2 class="app-title">Wheel of Fortune</h2>
                 <p class="app-desc">Spin the board to play</p>
             </a>
-            <a href="/timer" class="app-card pending">
+            <a href="/timer" class="app-card">
                 <span class="app-icon">⏱️</span>
                 <h2 class="app-title">Timer</h2>
-                <p class="app-desc">Coming Soon...</p>
+                <p class="app-desc">Set and trigger a countdown</p>
             </a>
         </div>
     </div>
@@ -82,6 +81,12 @@
         <input type="text" id="cfg-uuid" placeholder="e.g. 79e0f461-351d-4b81-b9a1-f2abd3bba27b">
         <p class="helper-text">Optional. Allows Pausing of the Fiestaboard automation while using apps so the board is not overwritten.</p>
         
+        <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
+
+        <label>Timer Page ID</label>
+        <input type="text" id="cfg-timer" placeholder="e.g. 12345678-abcd-1234...">
+        <p class="helper-text">The FiestaBoard PageID to use for the Timer display.</p>
+        
         <button class="btn-success" onclick="saveSettings()">Save Configuration</button>
         <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
         <p id="settings-status" style="text-align:center; font-size: 12px; margin-top: 15px;"></p>
@@ -98,6 +103,7 @@
                     document.getElementById('cfg-ip').value = data.vestaboard_ip || '';
                     document.getElementById('cfg-key').value = data.local_api_key || '';
                     document.getElementById('cfg-uuid').value = data.fiestaboard_uuid || '';
+                    document.getElementById('cfg-timer').value = data.timer_page_id || '';
                 });
         }
 
@@ -111,7 +117,8 @@
             const payload = {
                 vestaboard_ip: document.getElementById('cfg-ip').value.trim(),
                 local_api_key: document.getElementById('cfg-key').value.trim(),
-                fiestaboard_uuid: document.getElementById('cfg-uuid').value.trim()
+                fiestaboard_uuid: document.getElementById('cfg-uuid').value.trim(),
+                timer_page_id: document.getElementById('cfg-timer').value.trim()
             };
 
             fetch('/api/config', {

@@ -12,21 +12,24 @@
         .home-btn { width: auto; padding: 8px 15px; font-size: 14px; background: #6c757d; margin: 0; text-decoration: none; color: white; border-radius: 6px; display: inline-block; font-weight: bold; }
         h1 { margin: 0; flex-grow: 1; text-align: center; padding-right: 80px; font-size: 24px; }
         
+        select { width: 100%; padding: 12px; margin: 15px 0 25px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; background-color: white; }
+
         .btn-primary, .btn-action {
             background-color: #007bff; border: none; color: white; padding: 15px 32px; text-align: center;
             text-decoration: none; display: inline-block; font-size: 16px; margin: 10px; cursor: pointer;
             border-radius: 8px; font-weight: bold; transition: opacity 0.2s; width: 100%; box-sizing: border-box;
         }
         .btn-primary:hover, .btn-action:hover { opacity: 0.9; }
+        .btn-primary:disabled { background-color: #6c757d; cursor: not-allowed; }
         
         .btn-action { width: auto; flex: 1; min-width: 120px; padding: 12px 15px; margin: 5px; }
         .btn-action.solve { background-color: #dc3545; }
-        .btn-action.auto { background-color: #6f42c1; }
         .btn-action.new { background-color: #28a745; }
-        .btn-action.end { background-color: #6c757d; }
         
-        #game-board { display: none; }
+        #game-board, #timer-screen { display: none; }
         
+        .timer-display { font-size: 48px; font-weight: bold; color: #007bff; margin: 20px 0; }
+
         .keyboard-section { margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 10px; border: 1px solid #eee; }
         .keyboard-section h3 { margin-top: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
         
@@ -38,7 +41,7 @@
             min-width: 45px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         .key:active { transform: translateY(2px); box-shadow: none; }
-        .key:disabled { background-color: #e0e0e0; color: #999; cursor: not-allowed; box-shadow: none; }
+        .key:disabled { cursor: not-allowed; box-shadow: none; }
         
         .controls { display: flex; justify-content: center; flex-wrap: wrap; margin-top: 25px; }
     </style>
@@ -52,8 +55,22 @@
         </div>
 
         <div id="start-screen">
-            <p style="color: #666; margin-bottom: 25px;">Ready to spin the board?</p>
-            <button class="btn-primary" onclick="startGame()">Start Game</button>
+            <p style="color: #666; font-weight: bold;">Select a Category:</p>
+            <select id="category-select">
+                <option value="random">🎲 Random Category</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.file }}">{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <button id="start-btn" class="btn-primary" onclick="startGame()">Start Game</button>
+            <p id="setup-status" style="color: red; font-size: 14px; margin-top: 10px;"></p>
+        </div>
+
+        <div id="timer-screen">
+            <h2 id="timer-category-text" style="color: #555;">CATEGORY</h2>
+            <p style="color: #666; margin-top: 5px;">Showing on Vestaboard...</p>
+            <div id="countdown" class="timer-display">15</div>
+            <p style="font-size: 14px; color: #999;">Puzzle will appear automatically.</p>
         </div>
 
         <div id="game-board">
@@ -68,72 +85,92 @@
             </div>
 
             <div class="controls">
-                <button class="btn-action auto" onclick="autoSolveGame()">Auto-Solve</button>
-                <button class="btn-action solve" onclick="solveGame()">Solve Now</button>
-                <button class="btn-action new" onclick="newGame()">New Game</button>
-                <button class="btn-action end" onclick="endGame()">End Game</button>
+                <button class="btn-action solve" onclick="solveGame()">Solve Puzzle</button>
+                <button class="btn-action new" onclick="location.reload()">End / New Game</button>
             </div>
         </div>
     </div>
 
     <script>
-        async function sendCommand(payload) {
-            try {
-                const response = await fetch('/api/wheel/command', {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-                if (!response.ok) {
-                    console.error("Failed to send command");
-                }
-            } catch (error) {
-                console.error("Network error:", error);
-                alert("Could not reach the web app server.");
-            }
-        }
-
-        async function clearTriggers() {
-            try {
-                await fetch('/api/wheel/clear', { method: "POST" });
-            } catch (error) {
-                console.error("Network error clearing triggers:", error);
-            }
-        }
-
         function startGame() {
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('game-board').style.display = 'block';
-            buildKeyboard();
-            sendCommand({ game: "start" });
+            const cat = document.getElementById('category-select').value;
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = true;
+            
+            fetch('/api/wheel/start', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ category: cat })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('start-screen').style.display = 'none';
+                    document.getElementById('timer-screen').style.display = 'block';
+                    document.getElementById('timer-category-text').innerText = data.category;
+                    runCountdown(15);
+                } else {
+                    document.getElementById('setup-status').innerText = "Error: " + data.message;
+                    startBtn.disabled = false;
+                }
+            })
+            .catch(() => {
+                document.getElementById('setup-status').innerText = "Network Error contacting hub.";
+                startBtn.disabled = false;
+            });
         }
 
-        function newGame() {
-            buildKeyboard(); 
-            sendCommand({ game: "start" });
+        function runCountdown(seconds) {
+            const display = document.getElementById('countdown');
+            display.innerText = seconds;
+            
+            const timer = setInterval(() => {
+                seconds--;
+                display.innerText = seconds;
+                
+                if (seconds <= 0) {
+                    clearInterval(timer);
+                    showPuzzle();
+                }
+            }, 1000);
+        }
+
+        function showPuzzle() {
+            fetch('/api/wheel/puzzle', { method: "POST" })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('timer-screen').style.display = 'none';
+                        document.getElementById('game-board').style.display = 'block';
+                        buildKeyboard();
+                    }
+                });
         }
 
         function solveGame() {
             const keys = document.querySelectorAll('.key');
             keys.forEach(key => key.disabled = true);
-            sendCommand({ game: "solve" });
-        }
-
-        function autoSolveGame() {
-            const keys = document.querySelectorAll('.key');
-            keys.forEach(key => key.disabled = true);
-            sendCommand({ game: "autosolve" });
-        }
-
-        function endGame() {
-            clearTriggers();
-            document.getElementById('game-board').style.display = 'none';
-            document.getElementById('start-screen').style.display = 'block';
+            fetch('/api/wheel/solve', { method: "POST" });
         }
 
         function guessLetter(letter, buttonElement) {
-            buttonElement.disabled = true; 
-            sendCommand({ game: "guess", letter: letter });
+            buttonElement.disabled = true;
+            
+            fetch('/api/wheel/guess', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ letter: letter })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.found) {
+                    buttonElement.style.backgroundColor = '#28a745'; // Green
+                    buttonElement.style.color = '#fff';
+                } else {
+                    buttonElement.style.backgroundColor = '#dc3545'; // Red
+                    buttonElement.style.color = '#fff';
+                }
+            });
         }
 
         function buildKeyboard() {

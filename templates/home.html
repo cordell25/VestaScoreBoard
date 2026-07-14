@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vestaboard Hub</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f4f4f9; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        .header-container { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+        .header-text { flex-grow: 1; text-align: center; margin-left: 40px; /* offset for the settings button to keep title centered */ }
+        h1 { margin: 0 0 5px 0; }
+        .subtitle { color: #666; font-size: 14px; margin: 0; }
+        
+        .settings-btn { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; }
+        .settings-btn:hover { opacity: 0.9; }
+
+        .grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        
+        .app-card { 
+            background: white; padding: 25px 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            text-align: center; text-decoration: none; color: #333; transition: transform 0.2s, box-shadow 0.2s; border: 2px solid transparent;
+        }
+        .app-card:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); border-color: #007bff; }
+        
+        .app-icon { font-size: 32px; margin-bottom: 10px; display: block; }
+        .app-title { font-size: 20px; font-weight: bold; margin: 0 0 5px 0; }
+        .app-desc { font-size: 14px; color: #666; margin: 0; }
+        .app-card.pending { opacity: 0.6; pointer-events: none; }
+
+        /* Settings Menu Styling */
+        h2 { text-align: center; margin-top: 0; }
+        label { font-weight: bold; font-size: 14px; color: #555; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        .helper-text { font-size: 12px; color: #666; margin-top: -10px; margin-bottom: 15px; line-height: 1.4; }
+        .btn-success { background: #28a745; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+        .btn-secondary { background: #6c757d; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="main-screen">
+        <div class="header-container">
+            <div class="header-text">
+                <h1>Vestaboard Central</h1>
+                <p class="subtitle">Select an app to launch</p>
+            </div>
+            <button class="settings-btn" onclick="openSettings()">⚙️</button>
+        </div>
+
+        <div class="grid">
+            <a href="/scoreboard" class="app-card">
+                <span class="app-icon">🏆</span>
+                <h2 class="app-title">Score Tracker</h2>
+                <p class="app-desc">Multi-player live scoring</p>
+            </a>
+            <a href="/wheel" class="app-card">
+                <span class="app-icon">🎡</span>
+                <h2 class="app-title">Wheel of Fortune</h2>
+                <p class="app-desc">Spin the board to play</p>
+            </a>
+            <a href="/timer" class="app-card pending">
+                <span class="app-icon">⏱️</span>
+                <h2 class="app-title">Timer</h2>
+                <p class="app-desc">Coming Soon...</p>
+            </a>
+        </div>
+    </div>
+
+    <div id="settings-screen" class="card hidden">
+        <h2>Global Settings</h2>
+        
+        <label>Vestaboard IP Address</label>
+        <input type="text" id="cfg-ip" placeholder="e.g. 192.168.1.50">
+        
+        <label>Local API Key</label>
+        <input type="password" id="cfg-key" placeholder="Enter your Local API token">
+        
+        <label>Fiestaboard UUID</label>
+        <input type="text" id="cfg-uuid" placeholder="e.g. 79e0f461-351d-4b81-b9a1-f2abd3bba27b">
+        <p class="helper-text">Optional. Allows Pausing of the Fiestaboard automation while using apps so the board is not overwritten.</p>
+        
+        <button class="btn-success" onclick="saveSettings()">Save Configuration</button>
+        <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
+        <p id="settings-status" style="text-align:center; font-size: 12px; margin-top: 15px;"></p>
+    </div>
+
+    <script>
+        function openSettings() {
+            document.getElementById('main-screen').classList.add('hidden');
+            document.getElementById('settings-screen').classList.remove('hidden');
+            
+            fetch('/api/config')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('cfg-ip').value = data.vestaboard_ip || '';
+                    document.getElementById('cfg-key').value = data.local_api_key || '';
+                    document.getElementById('cfg-uuid').value = data.fiestaboard_uuid || '';
+                });
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-screen').classList.add('hidden');
+            document.getElementById('main-screen').classList.remove('hidden');
+            document.getElementById('settings-status').innerText = "";
+        }
+
+        function saveSettings() {
+            const payload = {
+                vestaboard_ip: document.getElementById('cfg-ip').value.trim(),
+                local_api_key: document.getElementById('cfg-key').value.trim(),
+                fiestaboard_uuid: document.getElementById('cfg-uuid').value.trim()
+            };
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                const status = document.getElementById('settings-status');
+                status.innerText = "Settings saved successfully!";
+                status.style.color = "green";
+                setTimeout(closeSettings, 1000);
+            })
+            .catch(() => {
+                const status = document.getElementById('settings-status');
+                status.innerText = "Error saving settings.";
+                status.style.color = "red";
+            });
+        }
+    </script>
+</body>
+</html>

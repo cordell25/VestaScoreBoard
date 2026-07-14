@@ -32,6 +32,7 @@
         h2 { text-align: center; margin-top: 0; }
         label { font-weight: bold; font-size: 14px; color: #555; display: block; margin-top: 10px; }
         input[type="text"], input[type="password"], select { width: 100%; padding: 10px; margin: 8px 0 5px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; background-color: white; }
+        select:disabled { background-color: #e9ecef; color: #6c757d; cursor: not-allowed; }
         .helper-text { font-size: 12px; color: #666; margin-top: 0px; margin-bottom: 15px; line-height: 1.4; }
         .btn-success { background: #28a745; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; margin-bottom: 10px; margin-top: 10px; }
         .btn-secondary { background: #6c757d; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
@@ -68,6 +69,7 @@
         </div>
     </div>
 
+    <!-- SETTINGS SCREEN -->
     <div id="settings-screen" class="card hidden">
         <h2>Global Settings</h2>
         
@@ -93,66 +95,91 @@
         
         <button class="btn-success" onclick="saveSettings()">Save Configuration</button>
         <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
-        <p id="settings-status" style="text-align:center; font-size: 12px; margin-top: 15px;"></p>
+        <p id="settings-status" style="text-align:center; font-size: 12px; margin-top: 15px; font-weight: bold;"></p>
     </div>
 
     <script>
+        let isInitialSetup = false;
+
         function openSettings() {
             document.getElementById('main-screen').classList.add('hidden');
             document.getElementById('settings-screen').classList.remove('hidden');
             
-            // 1. Fetch saved configuration
+            // Fetch saved configuration
             fetch('/api/config')
                 .then(res => res.json())
                 .then(configData => {
                     document.getElementById('cfg-ip').value = configData.vestaboard_ip || '';
                     document.getElementById('cfg-key').value = configData.local_api_key || '';
                     
-                    // 2. Fetch Boards from API and populate dropdown
-                    fetch('/api/proxy/boards')
-                        .then(res => res.json())
-                        .then(boards => {
-                            const uuidSelect = document.getElementById('cfg-uuid');
-                            uuidSelect.innerHTML = '<option value="">None (Optional)</option>';
-                            
-                            if (Array.isArray(boards)) {
-                                boards.forEach(board => {
-                                    const opt = document.createElement('option');
-                                    opt.value = board.id;
-                                    opt.innerText = `${board.name} (${board.device_type})`;
-                                    if (board.id === configData.fiestaboard_uuid) {
-                                        opt.selected = true;
-                                    }
-                                    uuidSelect.appendChild(opt);
-                                });
-                            }
-                        })
-                        .catch(() => {
-                            document.getElementById('cfg-uuid').innerHTML = '<option value="">Error loading boards</option>';
-                        });
+                    // Check if they need to do the initial setup first
+                    if (!configData.vestaboard_ip || !configData.local_api_key) {
+                        isInitialSetup = true;
+                        
+                        const uuidSelect = document.getElementById('cfg-uuid');
+                        uuidSelect.innerHTML = '<option value="">Save IP and API Key first...</option>';
+                        uuidSelect.disabled = true;
+                        
+                        const timerSelect = document.getElementById('cfg-timer');
+                        timerSelect.innerHTML = '<option value="">Save IP and API Key first...</option>';
+                        timerSelect.disabled = true;
+                    } else {
+                        isInitialSetup = false;
+                        loadDropdowns(configData);
+                    }
+                });
+        }
 
-                    // 3. Fetch Pages from API and populate dropdown
-                    fetch('/api/proxy/pages')
-                        .then(res => res.json())
-                        .then(pages => {
-                            const timerSelect = document.getElementById('cfg-timer');
-                            timerSelect.innerHTML = '<option value="">None (Optional)</option>';
-                            
-                            if (Array.isArray(pages)) {
-                                pages.forEach(page => {
-                                    const opt = document.createElement('option');
-                                    opt.value = page.id;
-                                    opt.innerText = page.name;
-                                    if (page.id === configData.timer_page_id) {
-                                        opt.selected = true;
-                                    }
-                                    timerSelect.appendChild(opt);
-                                });
-                            }
-                        })
-                        .catch(() => {
-                            document.getElementById('cfg-timer').innerHTML = '<option value="">Error loading pages</option>';
-                        });
+        function loadDropdowns(configData) {
+            const uuidSelect = document.getElementById('cfg-uuid');
+            const timerSelect = document.getElementById('cfg-timer');
+            
+            uuidSelect.disabled = false;
+            timerSelect.disabled = false;
+            
+            uuidSelect.innerHTML = '<option value="">Loading boards...</option>';
+            timerSelect.innerHTML = '<option value="">Loading pages...</option>';
+            
+            // Fetch Boards
+            fetch('/api/proxy/boards')
+                .then(res => res.json())
+                .then(data => {
+                    uuidSelect.innerHTML = '<option value="">None (Optional)</option>';
+                    
+                    // Dig into the object to find the 'boards' array
+                    const boardsList = data.boards || [];
+                    
+                    boardsList.forEach(board => {
+                        const opt = document.createElement('option');
+                        opt.value = board.id;
+                        opt.innerText = `${board.name} (${board.device_type})`;
+                        if (board.id === configData.fiestaboard_uuid) opt.selected = true;
+                        uuidSelect.appendChild(opt);
+                    });
+                })
+                .catch(() => {
+                    uuidSelect.innerHTML = '<option value="">Error loading boards</option>';
+                });
+
+            // Fetch Pages
+            fetch('/api/proxy/pages')
+                .then(res => res.json())
+                .then(data => {
+                    timerSelect.innerHTML = '<option value="">None (Optional)</option>';
+                    
+                    // Safely check for an array directly, or inside 'pages'/'data'
+                    const pagesList = Array.isArray(data) ? data : (data.pages || data.data || []);
+                    
+                    pagesList.forEach(page => {
+                        const opt = document.createElement('option');
+                        opt.value = page.id;
+                        opt.innerText = page.name;
+                        if (page.id === configData.timer_page_id) opt.selected = true;
+                        timerSelect.appendChild(opt);
+                    });
+                })
+                .catch(() => {
+                    timerSelect.innerHTML = '<option value="">Error loading pages</option>';
                 });
         }
 
@@ -166,8 +193,8 @@
             const payload = {
                 vestaboard_ip: document.getElementById('cfg-ip').value.trim(),
                 local_api_key: document.getElementById('cfg-key').value.trim(),
-                fiestaboard_uuid: document.getElementById('cfg-uuid').value, // This is now a dropdown value
-                timer_page_id: document.getElementById('cfg-timer').value   // This is now a dropdown value
+                fiestaboard_uuid: document.getElementById('cfg-uuid').value,
+                timer_page_id: document.getElementById('cfg-timer').value
             };
 
             fetch('/api/config', {
@@ -178,9 +205,17 @@
             .then(res => res.json())
             .then(data => {
                 const status = document.getElementById('settings-status');
-                status.innerText = "Settings saved successfully!";
-                status.style.color = "green";
-                setTimeout(closeSettings, 1000);
+                
+                if (isInitialSetup) {
+                    isInitialSetup = false;
+                    status.innerText = "Base Settings Saved! Loading Fiestaboard options...";
+                    status.style.color = "#28a745";
+                    loadDropdowns({ fiestaboard_uuid: "", timer_page_id: "" });
+                } else {
+                    status.innerText = "Settings saved successfully!";
+                    status.style.color = "#28a745";
+                    setTimeout(closeSettings, 1000);
+                }
             })
             .catch(() => {
                 const status = document.getElementById('settings-status');

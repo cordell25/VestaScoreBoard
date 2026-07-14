@@ -91,7 +91,8 @@ sudo systemctl start fiestaboard-webapp
 ```
 
 **Useful Troubleshooting Commands**
-If you ever need to troubleshoot the background service, use these commands:
+If you ever need to troubleshoot the background service, use these commands
+
 Check status: 
 ```
 sudo systemctl status fiestaboard-webapp (press q to exit the log view)

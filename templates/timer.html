@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timer Setup</title>
+    <title>Timer</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f4f4f9; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; text-align: center; }
@@ -16,23 +16,23 @@
         .pause-btn:disabled { opacity: 0.3; cursor: not-allowed; background: #6c757d !important; }
         .pause-btn:hover:not(:disabled) { opacity: 0.9; }
 
-        .form-group { text-align: left; margin-bottom: 20px; }
+        .form-group { text-align: left; margin-bottom: 15px; }
         label { font-weight: bold; font-size: 14px; color: #555; display: block; margin-bottom: 8px; }
-        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
         
-        .duration-container { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        .duration-container { display: flex; flex-direction: column; align-items: center; gap: 15px; margin-top: 15px; }
         .time-box { display: flex; flex-direction: column; align-items: center; }
         
         .timer-controls { display: flex; align-items: center; justify-content: center; }
-        input[type="number"].timer-input { font-size: 36px; font-weight: bold; width: 90px; height: 70px; text-align: center; border: 2px solid #ccc; background: #fff; margin: 0 10px; border-radius: 12px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1); -moz-appearance: textfield; }
+        input[type="number"].timer-input { font-size: 28px; font-weight: bold; width: 80px; height: 60px; text-align: center; border: 2px solid #ccc; background: #fff; margin: 0 10px; border-radius: 12px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1); -moz-appearance: textfield; }
         input[type="number"].timer-input:focus { outline: none; border-color: #007bff; box-shadow: 0 0 8px rgba(0,123,255,0.5); }
         input[type="number"].timer-input::-webkit-outer-spin-button, input[type="number"].timer-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         
-        .control-btn { width: 45px; height: 45px; font-size: 24px; background: #007bff; color: #fff; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 3px 6px rgba(0,0,0,0.2); }
+        .control-btn { width: 40px; height: 40px; font-size: 24px; background: #007bff; color: #fff; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; padding: 0; }
         .control-btn:hover { background: #0056b3; }
         .control-btn:active { transform: translateY(2px); box-shadow: none; }
 
-        .btn-start { background-color: #28a745; border: none; color: white; padding: 18px 32px; text-align: center; text-decoration: none; display: block; font-size: 20px; margin: 30px auto 10px auto; cursor: pointer; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.15); transition: opacity 0.2s; }
+        .btn-start { background-color: #28a745; border: none; color: white; padding: 14px 24px; text-align: center; text-decoration: none; display: block; font-size: 18px; margin: 25px auto 10px auto; cursor: pointer; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box; box-shadow: 0 4px 6px rgba(0,0,0,0.15); transition: opacity 0.2s; }
         .btn-start:hover { opacity: 0.9; }
         
         #status-text { text-align: center; font-size: 14px; font-weight: bold; color: #555; margin-top: 15px; min-height: 20px; }
@@ -43,7 +43,7 @@
     <div class="card">
         <div class="header-bar">
             <a href="/" class="home-btn">🏠 Home</a>
-            <h1>Fiesta Timer</h1>
+            <h1>Timer</h1>
             <button id="global-pause-btn" class="pause-btn" onclick="togglePause()" disabled title="Loading...">⏸️</button>
         </div>
 
@@ -72,7 +72,7 @@
             </div>
         </div>
         
-        <button id="start-btn" class="btn-start" onclick="startTimer()">Start Countdown</button>
+        <button id="start-btn" class="btn-start" onclick="startTimer()">Start Timer</button>
         <p id="status-text"></p>
     </div>
 
@@ -84,7 +84,6 @@
             initApp();
         });
 
-        // --- PAUSE AUTOMATION LOGIC ---
         function initApp() {
             fetch('/api/config')
                 .then(res => res.json())
@@ -161,7 +160,6 @@
             }
         }
 
-        // --- TIMER LOGIC ---
         function adjustTimer(type, change) {
             const input = document.getElementById(type === 'min' ? 'timer-min' : 'timer-sec');
             let val = parseInt(input.value) || 0;
@@ -181,7 +179,7 @@
             const m = parseInt(document.getElementById('timer-min').value) || 0;
             const s = parseInt(document.getElementById('timer-sec').value) || 0;
             if (m === 0 && s === 0) {
-                document.getElementById('timer-sec').value = 1; // Minimum 1 second
+                document.getElementById('timer-sec').value = 1; 
             }
         }
 
@@ -205,7 +203,6 @@
                     status.innerText = data.message;
                     status.style.color = "green";
                     
-                    // Automation will be forced to pause by the backend, refresh our UI icon
                     isAutomationPaused = true; 
                     updatePauseButtonUI(true);
                 } else {

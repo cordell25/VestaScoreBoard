@@ -370,8 +370,24 @@ vestaword_state = {
     "target_word": "",
     "guesses": [],     
     "max_guesses": 6,
-    "winner": None
+    "winner": None,
+    "timer_enabled": False,
+    "timer_seconds": 30,
+    "turn_id": 0,
+    "game_id": None
 }
+
+def schedule_vestaword_unpause(game_id):
+    """Background thread to wait 30s, then unpause if no new game started."""
+    time.sleep(30)
+    if vestaword_state["game_id"] == game_id and vestaword_state["status"] != "playing":
+        cfg = get_config()
+        board_uuid = cfg.get("fiestaboard_uuid")
+        if board_uuid:
+            try:
+                requests.post(f"http://fiestapi.local:4420/api/settings/board/{board_uuid}/pause", json={"paused": False}, timeout=5)
+            except Exception as e:
+                print(f"Vesta-word auto-unpause failed: {e}")
 
 @app.route('/api/vestaword/state', methods=['GET'])
 def vestaword_get_state():
@@ -381,6 +397,11 @@ def vestaword_get_state():
 def vestaword_join():
     if vestaword_state["status"] != "lobby":
         return jsonify({"status": "error", "message": "Game already in progress!"}), 400
+        
+    if len(vestaword_state["players"]) == 0:
+        vestaword_state["max_guesses"] = int(request.json.get("max_guesses", 6))
+        vestaword_state["timer_enabled"] = bool(request.json.get("timer_enabled", False))
+        vestaword_state["timer_seconds"] = int(request.json.get("timer_seconds", 30))
         
     player_name = request.json.get("name", "Player").upper()[:10]
     player_id = str(uuid.uuid4())
@@ -421,18 +442,31 @@ def vestaword_start():
     vestaword_state["current_turn"] = 0
     vestaword_state["guesses"] = []
     vestaword_state["winner"] = None
+    vestaword_state["turn_id"] += 1
+    vestaword_state["game_id"] = str(uuid.uuid4())
+    
+    # Auto-Pause Fiestaboard when game starts
+    cfg = get_config()
+    board_uuid = cfg.get("fiestaboard_uuid")
+    if board_uuid:
+        try:
+            requests.post(f"http://fiestapi.local:4420/api/settings/board/{board_uuid}/pause", json={"paused": True}, timeout=5)
+        except Exception as e:
+            print(f"Vesta-word auto-pause failed: {e}")
     
     update_vestaword_board()
     return jsonify({"status": "success"})
 
 @app.route('/api/vestaword/end', methods=['POST'])
 def vestaword_end():
+    current_game_id = vestaword_state["game_id"]
     vestaword_state["status"] = "lobby"
     vestaword_state["players"] = []
     vestaword_state["current_turn"] = 0
     vestaword_state["target_word"] = ""
     vestaword_state["guesses"] = []
     vestaword_state["winner"] = None
+    vestaword_state["turn_id"] += 1
     
     board = [[0]*15 for _ in range(3)]
     msg = "GAME ENDED".center(15)
@@ -443,6 +477,26 @@ def vestaword_end():
     except:
         pass
         
+    # Start 30-second unpause thread
+    t = threading.Thread(target=schedule_vestaword_unpause, args=(current_game_id,))
+    t.daemon = True
+    t.start()
+        
+    return jsonify({"status": "success"})
+
+@app.route('/api/vestaword/timeout', methods=['POST'])
+def vestaword_timeout():
+    if vestaword_state["status"] != "playing":
+        return jsonify({"status": "error", "message": "Game not active"}), 400
+        
+    player_id = request.json.get("player_id")
+    current_player = vestaword_state["players"][vestaword_state["current_turn"]]
+    
+    if player_id == current_player["id"]:
+        vestaword_state["current_turn"] = (vestaword_state["current_turn"] + 1) % len(vestaword_state["players"])
+        vestaword_state["turn_id"] += 1
+        update_vestaword_board()
+        
     return jsonify({"status": "success"})
 
 def update_vestaword_board():
@@ -450,7 +504,7 @@ def update_vestaword_board():
     
     if vestaword_state["status"] == "playing":
         current_player = vestaword_state["players"][vestaword_state["current_turn"]]["name"]
-        header_str = f"{current_player} {len(vestaword_state['guesses']) + 1}/6"
+        header_str = f"{current_player} {len(vestaword_state['guesses']) + 1}/{vestaword_state['max_guesses']}"
         turn_text = header_str[:15].center(15)
         
         for j, char in enumerate(turn_text): 
@@ -507,6 +561,8 @@ def vestaword_guess():
             target_chars[target_chars.index(guess[i])] = None
 
     vestaword_state["guesses"].append({"word": guess, "colors": colors})
+    vestaword_state["turn_id"] += 1
+    current_game_id = vestaword_state["game_id"]
 
     if guess == target:
         vestaword_state["status"] = "game_over"
@@ -518,6 +574,12 @@ def vestaword_guess():
         word_text = guess[:15].center(15)
         for j, char in enumerate(word_text): board[1][j] = VB_CHARS.get(char, 0)
         send_to_vestaboard(board)
+        
+        # Start 30-second unpause thread for Win
+        t = threading.Thread(target=schedule_vestaword_unpause, args=(current_game_id,))
+        t.daemon = True
+        t.start()
+        
         return jsonify({"status": "success"})
         
     elif len(vestaword_state["guesses"]) >= vestaword_state["max_guesses"]:
@@ -530,6 +592,12 @@ def vestaword_guess():
         word_text = f"WAS: {target}"[:15].center(15)
         for j, char in enumerate(word_text): board[2][j] = VB_CHARS.get(char, 0)
         send_to_vestaboard(board)
+        
+        # Start 30-second unpause thread for Loss
+        t = threading.Thread(target=schedule_vestaword_unpause, args=(current_game_id,))
+        t.daemon = True
+        t.start()
+        
         return jsonify({"status": "success"})
         
     else:

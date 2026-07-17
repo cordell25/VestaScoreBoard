@@ -41,7 +41,8 @@
         
         .timer-display { font-size: 32px; font-weight: bold; color: #dc3545; margin: 10px 0; }
         
-        .word-input-display { font-size: 36px; letter-spacing: 10px; font-weight: bold; min-height: 50px; margin: 10px 0 20px 0; color: #007bff; text-transform: uppercase; }
+        .word-input-display { font-size: 36px; letter-spacing: 10px; font-weight: bold; min-height: 50px; margin: 10px 0 0 0; color: #007bff; text-transform: uppercase; }
+        .error-message { color: #dc3545; font-weight: bold; font-size: 14px; min-height: 20px; margin-bottom: 15px; }
         
         .keyboard { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
         .keyboard-row { display: flex; justify-content: center; gap: 6px; }
@@ -138,6 +139,8 @@
             <div class="guesses-container" id="past-guesses"></div>
             
             <div class="word-input-display" id="current-input"></div>
+            <!-- New inline error message block -->
+            <div id="guess-error" class="error-message"></div>
             
             <div class="keyboard" id="keyboard"></div>
             
@@ -293,6 +296,7 @@
             if (state.turn_id !== currentTurnId) {
                 currentTurnId = state.turn_id;
                 clearInterval(turnTimerInterval);
+                document.getElementById('guess-error').innerText = ""; // Clear errors on turn change
                 
                 if (state.timer_enabled && state.status === 'playing') {
                     timerDisplay.style.display = 'block';
@@ -362,7 +366,6 @@
                     if (letterColors[letter] === undefined) {
                         letterColors[letter] = color;
                     } else {
-                        // Green overrides Yellow/Black, Yellow overrides Black
                         if (color === 66) letterColors[letter] = 66; 
                         else if (color === 65 && letterColors[letter] !== 66) letterColors[letter] = 65; 
                     }
@@ -372,7 +375,6 @@
             keys.forEach(k => {
                 k.classList.remove('key-66', 'key-65', 'key-0');
                 const letter = k.innerText;
-                // Only color the single-character buttons (ignore DEL and ENTER)
                 if (letter.length === 1 && letterColors[letter] !== undefined) {
                     k.classList.add(`key-${letterColors[letter]}`);
                 }
@@ -380,6 +382,7 @@
         }
 
         function typeLetter(letter) {
+            document.getElementById('guess-error').innerText = ""; // Instantly clear error
             if(currentInput.length < 5) {
                 currentInput += letter;
                 document.getElementById('current-input').innerText = currentInput;
@@ -387,17 +390,19 @@
         }
 
         function deleteLetter() {
+            document.getElementById('guess-error').innerText = ""; // Instantly clear error
             currentInput = currentInput.slice(0, -1);
             document.getElementById('current-input').innerText = currentInput;
         }
 
         function submitGuess() {
             if(currentInput.length !== 5) {
-                alert("Guess must be 5 letters!");
+                document.getElementById('guess-error').innerText = "Guess must be 5 letters!";
                 return;
             }
             
             document.getElementById('submit-guess-btn').disabled = true;
+            document.getElementById('guess-error').innerText = "";
             
             fetch('/api/vestaword/guess', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -409,7 +414,10 @@
                     currentInput = "";
                     document.getElementById('current-input').innerText = "";
                 } else {
-                    alert(data.message);
+                    // Show error, clear input, and re-enable submit button
+                    document.getElementById('guess-error').innerText = data.message;
+                    currentInput = ""; 
+                    document.getElementById('current-input').innerText = "";
                     document.getElementById('submit-guess-btn').disabled = false;
                 }
             });

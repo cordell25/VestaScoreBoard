@@ -20,11 +20,13 @@
         .btn-primary { background-color: #007bff; border: none; color: white; padding: 15px 32px; text-align: center; display: inline-block; font-size: 16px; cursor: pointer; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box; }
         .btn-success { background-color: #28a745; border: none; color: white; padding: 15px; font-size: 16px; cursor: pointer; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box; margin-top: 15px; }
         
-        /* New Submit & Leave Buttons */
         .btn-submit { background-color: #007bff; color: white; border: none; padding: 18px; font-size: 20px; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box; margin-top: 20px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn-submit:disabled { background-color: #6c757d; cursor: not-allowed; opacity: 0.5; }
         
-        .btn-leave { background: transparent; color: #dc3545; border: 1px solid #dc3545; padding: 8px 15px; font-size: 14px; cursor: pointer; border-radius: 6px; font-weight: bold; margin: 30px auto 0 auto; display: inline-block; }
+        /* Updated Bottom Action Buttons */
+        .bottom-actions { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        .btn-leave { background: transparent; color: #6c757d; border: 1px solid #6c757d; padding: 10px 15px; font-size: 14px; cursor: pointer; border-radius: 6px; font-weight: bold; flex: 1; }
+        .btn-end { background: transparent; color: #dc3545; border: 1px solid #dc3545; padding: 10px 15px; font-size: 14px; cursor: pointer; border-radius: 6px; font-weight: bold; flex: 1; }
         
         #lobby-screen, #game-screen { display: none; }
         
@@ -38,7 +40,6 @@
         
         .word-input-display { font-size: 36px; letter-spacing: 10px; font-weight: bold; min-height: 50px; margin: 10px 0 20px 0; color: #007bff; text-transform: uppercase; }
         
-        /* Mobile-Optimized Keyboard */
         .keyboard { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
         .keyboard-row { display: flex; justify-content: center; gap: 6px; }
         .key { background-color: #d3d6da; color: black; border: none; border-radius: 6px; padding: 15px 0; font-size: 20px; cursor: pointer; font-weight: bold; flex: 1; text-align: center; max-width: 45px; }
@@ -51,7 +52,7 @@
         
         .color-66 { background-color: #28a745; } 
         .color-65 { background-color: #ffc107; color: black; } 
-        .color-69 { background-color: #6c757d; } 
+        .color-0 { background-color: #333; border: 1px solid #555; } 
     </style>
 </head>
 <body>
@@ -89,7 +90,10 @@
             
             <button id="submit-guess-btn" class="btn-submit" onclick="submitGuess()" disabled>SUBMIT GUESS</button>
             
-            <button class="btn-leave" onclick="location.reload()">Leave Game</button>
+            <div class="bottom-actions">
+                <button class="btn-leave" onclick="window.location.href='/'">Leave Game</button>
+                <button class="btn-end" onclick="endGame()">End Game</button>
+            </div>
         </div>
     </div>
 
@@ -159,16 +163,35 @@
             fetch('/api/vestaword/start', { method: 'POST' });
         }
 
+        function endGame() {
+            if(confirm("Are you sure you want to end this game for everyone?")) {
+                fetch('/api/vestaword/end', { method: 'POST' });
+            }
+        }
+
         function pollGameState() {
             fetch('/api/vestaword/state')
                 .then(res => res.json())
                 .then(state => {
+                    // Check if the game was ended and reset our local UI if we were kicked out
                     if(state.status === 'lobby') {
+                        document.getElementById('game-screen').style.display = 'none';
+                        document.getElementById('lobby-screen').style.display = 'block';
+                        
+                        // If we had a player ID, but we aren't in the state array anymore (because End Game was clicked)
+                        if (myPlayerId && !state.players.find(p => p.id === myPlayerId)) {
+                            myPlayerId = null;
+                            document.getElementById('join-btn').style.display = 'inline-block';
+                            document.getElementById('join-btn').disabled = false;
+                            document.getElementById('player-name').disabled = false;
+                            document.getElementById('lobby-waiting').style.display = 'none';
+                        }
+                        
                         const ul = document.getElementById('player-list-ul');
                         ul.innerHTML = '';
                         state.players.forEach(p => ul.innerHTML += `<li>${p.name} ${p.id === myPlayerId ? "(You)" : ""}</li>`);
                     }
-                    if(state.status === 'playing' || state.status === 'game_over') {
+                    else if(state.status === 'playing' || state.status === 'game_over') {
                         document.getElementById('lobby-screen').style.display = 'none';
                         document.getElementById('game-screen').style.display = 'block';
                         renderGameState(state);

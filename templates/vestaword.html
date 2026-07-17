@@ -45,9 +45,14 @@
         
         .keyboard { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
         .keyboard-row { display: flex; justify-content: center; gap: 6px; }
-        .key { background-color: #d3d6da; color: black; border: none; border-radius: 6px; padding: 15px 0; font-size: 20px; cursor: pointer; font-weight: bold; flex: 1; text-align: center; max-width: 45px; }
+        .key { background-color: #d3d6da; color: black; border: none; border-radius: 6px; padding: 15px 0; font-size: 20px; cursor: pointer; font-weight: bold; flex: 1; text-align: center; max-width: 45px; transition: background-color 0.2s, color 0.2s; }
         .key.action { flex: 1.5; font-size: 14px; max-width: 65px; background-color: #6c757d; color: white; }
         .key:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Dynamic Keyboard Colors */
+        .key-66 { background-color: #28a745 !important; color: white !important; } 
+        .key-65 { background-color: #ffc107 !important; color: black !important; } 
+        .key-0 { background-color: #555 !important; color: white !important; } 
 
         .guesses-container { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
         .guess-row { display: flex; justify-content: center; gap: 5px; }
@@ -70,6 +75,10 @@
             .player-row, .player-list li { border-bottom: 1px solid #444; }
             .key { background-color: #444; color: #f4f4f9; }
             .key:disabled { opacity: 0.4; }
+            
+            /* Dynamic Keyboard Dark Mode Adjustments */
+            .key-0 { background-color: #222 !important; color: #777 !important; border: 1px solid #444; }
+
             .turn-waiting { background-color: #3a2e00; color: #ffdb4d; border-color: #665700; }
             .turn-active { background-color: #003311; color: #4dff88; border-color: #006622; }
             hr { background: #444 !important; }
@@ -234,12 +243,10 @@
             fetch('/api/vestaword/state')
                 .then(res => res.json())
                 .then(state => {
-                    
                     if(state.status === 'lobby') {
                         document.getElementById('game-screen').style.display = 'none';
                         document.getElementById('lobby-screen').style.display = 'block';
                         
-                        // Lock inputs if someone else is already in the lobby
                         if(state.players.length > 0) {
                             document.getElementById('setting-guesses').disabled = true;
                             document.getElementById('setting-timer-enabled').disabled = true;
@@ -283,7 +290,6 @@
             const submitBtn = document.getElementById('submit-guess-btn');
             const timerDisplay = document.getElementById('turn-timer-display');
             
-            // Check if turn changed (new turn ID)
             if (state.turn_id !== currentTurnId) {
                 currentTurnId = state.turn_id;
                 clearInterval(turnTimerInterval);
@@ -334,6 +340,7 @@
                 }
             }
 
+            // Render Previous Guesses
             const guessesDiv = document.getElementById('past-guesses');
             guessesDiv.innerHTML = '';
             state.guesses.forEach(g => {
@@ -343,6 +350,32 @@
                 }
                 html += '</div>';
                 guessesDiv.innerHTML += html;
+            });
+
+            // Evaluate & Apply Keyboard Colors
+            const letterColors = {};
+            state.guesses.forEach(g => {
+                for(let i=0; i<5; i++) {
+                    const letter = g.word[i];
+                    const color = g.colors[i];
+                    
+                    if (letterColors[letter] === undefined) {
+                        letterColors[letter] = color;
+                    } else {
+                        // Green overrides Yellow/Black, Yellow overrides Black
+                        if (color === 66) letterColors[letter] = 66; 
+                        else if (color === 65 && letterColors[letter] !== 66) letterColors[letter] = 65; 
+                    }
+                }
+            });
+
+            keys.forEach(k => {
+                k.classList.remove('key-66', 'key-65', 'key-0');
+                const letter = k.innerText;
+                // Only color the single-character buttons (ignore DEL and ENTER)
+                if (letter.length === 1 && letterColors[letter] !== undefined) {
+                    k.classList.add(`key-${letterColors[letter]}`);
+                }
             });
         }
 

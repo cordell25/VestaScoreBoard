@@ -457,8 +457,10 @@ def vestaword_start():
         return jsonify({"status": "error", "message": "Need at least 1 player"}), 400
         
     try:
-        words = get_valid_words()
-        vestaword_state["target_word"] = random.choice(list(words)).upper() if words else "BOARD"
+        # Load the smaller answer bank for the target word
+        with open('data/5_letter_answers.json', 'r') as f:
+            answers = json.load(f)
+        vestaword_state["target_word"] = random.choice(answers).upper() if answers else "BOARD"
     except Exception as e:
         print(f"Word load error: {e}")
         vestaword_state["target_word"] = "BOARD" 

@@ -32,8 +32,9 @@
         #lobby-screen, #game-screen { display: none; }
         
         .player-list { list-style: none; padding: 0; margin: 15px 0; background: #f8f9fa; border-radius: 8px; }
-        .player-list li { padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; font-size: 18px; }
+        .player-list li { padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; font-size: 18px; display: flex; justify-content: space-between; align-items: center; }
         .player-list li:last-child { border-bottom: none; }
+        .win-badge { background: #ffc107; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: 14px; }
 
         .turn-banner { padding: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; margin-bottom: 10px; transition: background-color 0.3s; }
         .turn-active { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -50,7 +51,6 @@
         .key.action { flex: 1.5; font-size: 14px; max-width: 65px; background-color: #6c757d; color: white; }
         .key:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Dynamic Keyboard Colors */
         .key-66 { background-color: #28a745 !important; color: white !important; } 
         .key-65 { background-color: #ffc107 !important; color: black !important; } 
         .key-0 { background-color: #555 !important; color: white !important; } 
@@ -63,23 +63,18 @@
         .color-65 { background-color: #ffc107; color: black; } 
         .color-0 { background-color: #333; border: 1px solid #555; } 
 
-        /* AUTOMATIC DARK MODE */
         @media (prefers-color-scheme: dark) {
             body { background: #121212; color: #e0e0e0; }
             .card { background: #1e1e1e; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
             h1, h2, h3, .app-title { color: #f4f4f9; }
             .subtitle, .app-desc, label, .helper-text { color: #aaa !important; }
-            p[style*="color: #555"], p[style*="color: #666"], h2[style*="color: #555"], h3[style*="color: #666"] { color: #aaa !important; }
             input[type="text"], input[type="password"], input[type="number"], select { background-color: #2c2c2c; color: #fff; border: 1px solid #444; }
             select:disabled, input:disabled { background-color: #222; color: #666; }
             .iteration-box, .keyboard-section, .player-list, .settings-box { background: #2a2a2a; border-color: #444; }
             .player-row, .player-list li { border-bottom: 1px solid #444; }
             .key { background-color: #444; color: #f4f4f9; }
             .key:disabled { opacity: 0.4; }
-            
-            /* Dynamic Keyboard Dark Mode Adjustments */
             .key-0 { background-color: #222 !important; color: #777 !important; border: 1px solid #444; }
-
             .turn-waiting { background-color: #3a2e00; color: #ffdb4d; border-color: #665700; }
             .turn-active { background-color: #003311; color: #4dff88; border-color: #006622; }
             hr { background: #444 !important; }
@@ -93,10 +88,10 @@
         <div class="header-bar">
             <a href="/" class="home-btn">🏠 Home</a>
             <h1>Vesta-Word</h1>
+            <div id="my-wins-display" style="display: none; font-weight: bold; color: #28a745; margin-right: 15px;">🏆 0</div>
             <button id="global-pause-btn" class="pause-btn" onclick="togglePause()" disabled title="Loading...">⏸️</button>
         </div>
 
-        <!-- LOBBY SCREEN -->
         <div id="lobby-screen" style="display: block;">
             
             <div id="setup-inputs">
@@ -107,12 +102,12 @@
                     <label>Turn Timer</label>
                     <select id="setting-timer-enabled" onchange="document.getElementById('timer-sec-container').style.display = this.value === 'true' ? 'block' : 'none'">
                         <option value="false">Off</option>
-                        <option value="true">On</option>
+                        <option value="true" selected>On</option>
                     </select>
                     
-                    <div id="timer-sec-container" style="display: none;">
+                    <div id="timer-sec-container" style="display: block;">
                         <label>Seconds per turn</label>
-                        <input type="number" id="setting-timer-sec" value="30" min="5" max="120">
+                        <input type="number" id="setting-timer-sec" value="60" min="5" max="120">
                     </div>
                     <p id="settings-msg" style="color: #007bff; font-size: 12px; margin-top: 10px; font-weight: bold;"></p>
                 </div>
@@ -130,21 +125,20 @@
             </div>
         </div>
 
-        <!-- GAME SCREEN -->
         <div id="game-screen">
             <div id="turn-banner" class="turn-banner turn-waiting">Waiting for game to start...</div>
             
-            <div id="turn-timer-display" class="timer-display" style="display: none;">30</div>
+            <div id="turn-timer-display" class="timer-display" style="display: none;">60</div>
             
             <div class="guesses-container" id="past-guesses"></div>
             
             <div class="word-input-display" id="current-input"></div>
-            <!-- New inline error message block -->
             <div id="guess-error" class="error-message"></div>
             
             <div class="keyboard" id="keyboard"></div>
             
             <button id="submit-guess-btn" class="btn-submit" onclick="submitGuess()" disabled>SUBMIT GUESS</button>
+            <button id="btn-replay" class="btn-success" onclick="startGame()" style="display: none; margin-top: 20px; font-size: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🔄 PLAY AGAIN</button>
             
             <div class="bottom-actions">
                 <button class="btn-leave" onclick="window.location.href='/'">Leave Game</button>
@@ -162,7 +156,7 @@
         
         let currentTurnId = -1;
         let turnTimerInterval;
-        let secondsRemaining = 30;
+        let secondsRemaining = 60;
         
         document.addEventListener('DOMContentLoaded', () => {
             fetch('/api/config').then(res => res.json()).then(data => {
@@ -249,6 +243,7 @@
                     if(state.status === 'lobby') {
                         document.getElementById('game-screen').style.display = 'none';
                         document.getElementById('lobby-screen').style.display = 'block';
+                        document.getElementById('my-wins-display').style.display = 'none';
                         
                         if(state.players.length > 0) {
                             document.getElementById('setting-guesses').disabled = true;
@@ -277,11 +272,21 @@
                         
                         const ul = document.getElementById('player-list-ul');
                         ul.innerHTML = '';
-                        state.players.forEach(p => ul.innerHTML += `<li>${p.name} ${p.id === myPlayerId ? "(You)" : ""}</li>`);
+                        state.players.forEach(p => {
+                            const isMe = p.id === myPlayerId ? "(You)" : "";
+                            ul.innerHTML += `<li><span>${p.name} ${isMe}</span> <span class="win-badge">🏆 ${p.wins}</span></li>`;
+                        });
                     }
                     else if(state.status === 'playing' || state.status === 'game_over') {
                         document.getElementById('lobby-screen').style.display = 'none';
                         document.getElementById('game-screen').style.display = 'block';
+                        
+                        const me = state.players.find(p => p.id === myPlayerId);
+                        if (me) {
+                            document.getElementById('my-wins-display').style.display = 'block';
+                            document.getElementById('my-wins-display').innerText = `🏆 ${me.wins}`;
+                        }
+                        
                         renderGameState(state);
                     }
                 });
@@ -291,28 +296,31 @@
             const banner = document.getElementById('turn-banner');
             const keys = document.querySelectorAll('.key');
             const submitBtn = document.getElementById('submit-guess-btn');
+            const replayBtn = document.getElementById('btn-replay');
             const timerDisplay = document.getElementById('turn-timer-display');
             
             if (state.turn_id !== currentTurnId) {
                 currentTurnId = state.turn_id;
                 clearInterval(turnTimerInterval);
-                document.getElementById('guess-error').innerText = ""; // Clear errors on turn change
+                document.getElementById('guess-error').innerText = ""; 
                 
+                // Now runs for EVERYONE connected to the lobby
                 if (state.timer_enabled && state.status === 'playing') {
                     timerDisplay.style.display = 'block';
                     secondsRemaining = state.timer_seconds;
                     timerDisplay.innerText = secondsRemaining;
                     
-                    if (state.players[state.current_turn].id === myPlayerId) {
-                        turnTimerInterval = setInterval(() => {
-                            secondsRemaining--;
-                            timerDisplay.innerText = secondsRemaining;
-                            if (secondsRemaining <= 0) {
-                                clearInterval(turnTimerInterval);
+                    turnTimerInterval = setInterval(() => {
+                        secondsRemaining--;
+                        timerDisplay.innerText = secondsRemaining;
+                        if (secondsRemaining <= 0) {
+                            clearInterval(turnTimerInterval);
+                            // Only the active player sends the timeout API call to prevent spam
+                            if (state.players[state.current_turn].id === myPlayerId) {
                                 forceTimeout();
                             }
-                        }, 1000);
-                    }
+                        }
+                    }, 1000);
                 } else {
                     timerDisplay.style.display = 'none';
                 }
@@ -322,10 +330,14 @@
                 banner.className = 'turn-banner turn-active';
                 banner.innerText = state.winner === 'Nobody' ? "Game Over! You lost." : `${state.winner} Wins!`;
                 keys.forEach(k => k.disabled = true);
-                submitBtn.disabled = true;
+                submitBtn.style.display = 'none';
+                replayBtn.style.display = 'block';
                 timerDisplay.style.display = 'none';
                 clearInterval(turnTimerInterval);
             } else {
+                submitBtn.style.display = 'block';
+                replayBtn.style.display = 'none';
+                
                 const currentPlayer = state.players[state.current_turn];
                 const isMyTurn = (currentPlayer.id === myPlayerId);
                 
@@ -344,7 +356,6 @@
                 }
             }
 
-            // Render Previous Guesses
             const guessesDiv = document.getElementById('past-guesses');
             guessesDiv.innerHTML = '';
             state.guesses.forEach(g => {
@@ -356,7 +367,6 @@
                 guessesDiv.innerHTML += html;
             });
 
-            // Evaluate & Apply Keyboard Colors
             const letterColors = {};
             state.guesses.forEach(g => {
                 for(let i=0; i<5; i++) {
@@ -382,7 +392,7 @@
         }
 
         function typeLetter(letter) {
-            document.getElementById('guess-error').innerText = ""; // Instantly clear error
+            document.getElementById('guess-error').innerText = ""; 
             if(currentInput.length < 5) {
                 currentInput += letter;
                 document.getElementById('current-input').innerText = currentInput;
@@ -390,7 +400,7 @@
         }
 
         function deleteLetter() {
-            document.getElementById('guess-error').innerText = ""; // Instantly clear error
+            document.getElementById('guess-error').innerText = ""; 
             currentInput = currentInput.slice(0, -1);
             document.getElementById('current-input').innerText = currentInput;
         }
@@ -414,7 +424,6 @@
                     currentInput = "";
                     document.getElementById('current-input').innerText = "";
                 } else {
-                    // Show error, clear input, and re-enable submit button
                     document.getElementById('guess-error').innerText = data.message;
                     currentInput = ""; 
                     document.getElementById('current-input').innerText = "";

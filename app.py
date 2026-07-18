@@ -372,8 +372,8 @@ vestaword_state = {
     "guesses": [],     
     "max_guesses": 6,
     "winner": None,
-    "timer_enabled": False,
-    "timer_seconds": 30,
+    "timer_enabled": True,
+    "timer_seconds": 60,
     "turn_id": 0,
     "game_id": None
 }
@@ -392,7 +392,7 @@ def get_valid_words():
     return valid_words_cache
 
 def handle_game_over_sequence(game_id):
-    """Background thread: Unpauses board and ends game silently at 30s"""
+    """Background thread: Unpauses board and returns game to lobby silently at 30s"""
     time.sleep(30)
     
     if vestaword_state["game_id"] == game_id:
@@ -405,10 +405,9 @@ def handle_game_over_sequence(game_id):
             except Exception as e:
                 print(f"Vesta-word auto-unpause failed: {e}")
                 
-        # 2. Silently auto-end the game and boot everyone to the lobby
+        # 2. Silently auto-end the game and boot to the lobby (we retain players so wins track)
         if vestaword_state["status"] == "game_over":
             vestaword_state["status"] = "lobby"
-            vestaword_state["players"] = []
             vestaword_state["current_turn"] = 0
             vestaword_state["target_word"] = ""
             vestaword_state["guesses"] = []
@@ -426,15 +425,16 @@ def vestaword_join():
         
     if len(vestaword_state["players"]) == 0:
         vestaword_state["max_guesses"] = int(request.json.get("max_guesses", 6))
-        vestaword_state["timer_enabled"] = bool(request.json.get("timer_enabled", False))
-        vestaword_state["timer_seconds"] = int(request.json.get("timer_seconds", 30))
+        vestaword_state["timer_enabled"] = bool(request.json.get("timer_enabled", True))
+        vestaword_state["timer_seconds"] = int(request.json.get("timer_seconds", 60))
         
     player_name = request.json.get("name", "Player").upper()[:10]
     player_id = str(uuid.uuid4())
     
     vestaword_state["players"].append({
         "id": player_id,
-        "name": player_name
+        "name": player_name,
+        "wins": 0
     })
     
     board = [[0]*15 for _ in range(3)]
@@ -595,11 +595,25 @@ def vestaword_guess():
         vestaword_state["status"] = "game_over"
         vestaword_state["winner"] = current_player["name"]
         
+        # Increment player win total
+        current_player["wins"] += 1
+        
         board = [[0]*15 for _ in range(3)]
         w_text = f"{current_player['name']} WINS!"[:15].center(15)
         for j, char in enumerate(w_text): board[0][j] = VB_CHARS.get(char, 0)
-        word_text = guess[:15].center(15)
-        for j, char in enumerate(word_text): board[1][j] = VB_CHARS.get(char, 0)
+        
+        padding = 3 
+        for i in range(5):
+            col = padding + (i * 2)
+            board[1][col] = VB_CHARS.get(guess[i], 0)
+            board[2][col] = 66
+            
+        # Add perimeter (every other space on edge)
+        board[1][0] = 66
+        board[1][14] = 66
+        for col in range(0, 15, 2):
+            board[2][col] = 66
+            
         send_to_vestaboard(board)
         
         t = threading.Thread(target=handle_game_over_sequence, args=(current_game_id,))
@@ -615,8 +629,16 @@ def vestaword_guess():
         board = [[0]*15 for _ in range(3)]
         l_text = "GAME OVER"[:15].center(15)
         for j, char in enumerate(l_text): board[0][j] = VB_CHARS.get(char, 0)
+        
         word_text = f"WAS: {target}"[:15].center(15)
-        for j, char in enumerate(word_text): board[2][j] = VB_CHARS.get(char, 0)
+        for j, char in enumerate(word_text): board[1][j] = VB_CHARS.get(char, 0)
+        
+        # Add perimeter (every other space on edge)
+        board[1][0] = 66
+        board[1][14] = 66
+        for col in range(0, 15, 2):
+            board[2][col] = 66
+            
         send_to_vestaboard(board)
         
         t = threading.Thread(target=handle_game_over_sequence, args=(current_game_id,))

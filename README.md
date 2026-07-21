@@ -4,17 +4,17 @@ Welcome to the **FiestaBoard WebApp**! This is a web-based party game and digita
 
 ## ✨ Features
 
-Based on the core application files, FiestaBoard currently features[cite: 1]:
-*   **The Wheel**: A category-based word puzzle game[cite: 1]. Guess words and phrases across multiple categories including:
-    *   Food & Drink[cite: 1]
-    *   People[cite: 1]
-    *   Places[cite: 1]
-    *   Things[cite: 1]
-    *   Phrases[cite: 1]
-    *   Actions ("Doing")[cite: 1]
-*   **VestaWord**: A 5-letter daily word guessing game (Wordle-style) using an extensive JSON dictionary[cite: 1].
-*   **Live Scoreboard**: Easily track points and player standings during your game nights[cite: 1].
-*   **Game Timer**: A built-in timer utility to keep turns moving and the pressure on[cite: 1].
+Based on the core application files, FiestaBoard currently features:
+*   **The Wheel**: A category-based word puzzle game. Guess words and phrases across multiple categories including:
+    *   Food & Drink
+    *   People
+    *   Places
+    *   Things
+    *   Phrases
+    *   Actions ("Doing")
+*   **VestaWord**: A 5-letter daily word guessing game (Wordle-style) using an extensive JSON dictionary.
+*   **Live Scoreboard**: Easily track points and player standings during your game nights.
+*   **Game Timer**: A built-in timer utility to keep turns moving and the pressure on.
 
 *   **Browser-Based Config:** Set your IP and API keys directly from the web UI (no terminal editing required).
 *   **Fiestaboard Integration:** Easily pause/resume your Fiestaboard server during gameplay so it doesn't overwrite.

@@ -370,7 +370,7 @@ vestaword_state = {
     "current_turn": 0, 
     "target_word": "",
     "guesses": [],     
-    "max_guesses": 6,
+    "max_guesses": 10,
     "winner": None,
     "timer_enabled": True,
     "timer_seconds": 60,
@@ -424,7 +424,7 @@ def vestaword_join():
         return jsonify({"status": "error", "message": "Game already in progress!"}), 400
         
     if len(vestaword_state["players"]) == 0:
-        vestaword_state["max_guesses"] = int(request.json.get("max_guesses", 6))
+        vestaword_state["max_guesses"] = int(request.json.get("max_guesses", 10))
         vestaword_state["timer_enabled"] = bool(request.json.get("timer_enabled", True))
         vestaword_state["timer_seconds"] = int(request.json.get("timer_seconds", 60))
         
@@ -523,29 +523,49 @@ def update_vestaword_board():
     
     if vestaword_state["status"] == "playing":
         current_player = vestaword_state["players"][vestaword_state["current_turn"]]["name"]
-        header_str = f"{current_player} {len(vestaword_state['guesses']) + 1}/{vestaword_state['max_guesses']}"
-        turn_text = header_str[:15].center(15)
+        guess_count = len(vestaword_state["guesses"]) + 1
+        max_g = vestaword_state["max_guesses"]
         
-        for j, char in enumerate(turn_text): 
+        # ROW 1: "P1 1/10: GUESS"
+        last_guess = vestaword_state["guesses"][-1]["word"] if vestaword_state["guesses"] else "GUESS"
+        turn_info = f" {guess_count}/{max_g}: {last_guess}"
+        
+        # Dynamically truncate player name to ensure everything fits the 15-character limit
+        name_len = max(1, 15 - len(turn_info))
+        player_short = current_player[:name_len]
+        header_str = f"{player_short}{turn_info}"[:15].ljust(15)
+        
+        for j, char in enumerate(header_str): 
             board[0][j] = VB_CHARS.get(char, 0)
+            
+        correct_letters = [None] * 5
+        yellow_letters = [[] for _ in range(5)]
         
-        revealed = [None, None, None, None, None]
         for guess_obj in vestaword_state["guesses"]:
             word = guess_obj["word"]
             colors = guess_obj["colors"]
             for i in range(5):
                 if colors[i] == 66:
-                    revealed[i] = word[i]
-        
-        padding = 3 
+                    correct_letters[i] = word[i]
+                elif colors[i] == 65:
+                    if word[i] not in yellow_letters[i] and len(yellow_letters[i]) < 3:
+                        yellow_letters[i].append(word[i])
+                        
+        # ROW 2: Red slots tracking correctly placed letters
+        indices = [1, 4, 7, 10, 13]
         for i in range(5):
-            col = padding + (i * 2)
-            if revealed[i]:
-                board[1][col] = VB_CHARS.get(revealed[i], 0) 
-                board[2][col] = 66                           
+            col = indices[i]
+            if correct_letters[i]:
+                board[1][col] = VB_CHARS.get(correct_letters[i], 0)
             else:
-                board[1][col] = 0                            
-                board[2][col] = 63                           
+                board[1][col] = 63  # RED code
+                
+        # ROW 3: Yellow characters formatted underneath their corresponding slots
+        yellow_starts = [0, 3, 6, 9, 12]
+        for i in range(5):
+            start = yellow_starts[i]
+            for j, char in enumerate(yellow_letters[i]):
+                board[2][start + j] = VB_CHARS.get(char, 0)
     
     try:
         send_to_vestaboard(board)

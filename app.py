@@ -207,7 +207,59 @@ CATEGORY_MAP = {
     "place.json": "ON THE MAP",
     "things.json": "THING / THINGS"
 }
-wheel_state = { "answer": "", "category_name": "", "revealed_letters": set(), "board_type": "note" }
+
+WHEEL_VALUES = [500, 550, 600, 650, 700, 750, 800, 850, 900, 2500, "BANKRUPT", "LOSE A TURN"]
+
+wheel_state = { 
+    "status": "lobby",
+    "players": [],
+    "current_turn": 0,
+    "answer": "", 
+    "category_name": "", 
+    "revealed_letters": [], 
+    "spin_value": None,
+    "message": "Waiting to start...",
+    "turn_id": 0,
+    "phase": "choice"
+}
+
+def advance_wheel_turn(prefix_msg=""):
+    wheel_state["current_turn"] = (wheel_state["current_turn"] + 1) % len(wheel_state["players"])
+    wheel_state["turn_id"] += 1
+    
+    player = wheel_state["players"][wheel_state["current_turn"]]
+    if player["score"] >= 250:
+        wheel_state["phase"] = "choice"
+        wheel_state["message"] = f"{prefix_msg} {player['name']}'s turn! Spin or Buy a Vowel?".strip()
+    else:
+        roll_wheel(prefix_msg)
+
+def continue_turn(prefix_msg=""):
+    player = wheel_state["players"][wheel_state["current_turn"]]
+    wheel_state["turn_id"] += 1
+    
+    if player["score"] >= 250:
+        wheel_state["phase"] = "choice"
+        wheel_state["message"] = f"{prefix_msg} Spin or Buy a Vowel?".strip()
+    else:
+        roll_wheel(prefix_msg)
+
+def roll_wheel(prefix_msg=""):
+    player = wheel_state["players"][wheel_state["current_turn"]]
+    val = random.choice(WHEEL_VALUES)
+    
+    if val == "BANKRUPT":
+        player["score"] = 0
+        msg = f"{prefix_msg} {player['name']} spun BANKRUPT!".strip()
+        advance_wheel_turn(msg)
+    elif val == "LOSE A TURN":
+        msg = f"{prefix_msg} {player['name']} spun LOSE A TURN!".strip()
+        advance_wheel_turn(msg)
+    else:
+        wheel_state["spin_value"] = val
+        wheel_state["phase"] = "spin"
+        wheel_state["message"] = f"{prefix_msg} {player['name']} spun ${val}! Pick a consonant.".strip()
+        wheel_state["turn_id"] += 1
 
 def load_random_puzzle(category_file=None):
     if not category_file or category_file == "random":
@@ -221,9 +273,10 @@ def load_random_puzzle(category_file=None):
     except:
         answer = "TEST PUZZLE" 
         cat_name = "ERROR LOADING DATA"
+        
     wheel_state["answer"] = answer
     wheel_state["category_name"] = cat_name
-    wheel_state["revealed_letters"] = set()
+    wheel_state["revealed_letters"] = []
     return cat_name, answer
 
 def build_puzzle_board():
@@ -233,6 +286,7 @@ def build_puzzle_board():
     lines = []
     current_line = []
     current_len = 0
+    
     for word in words:
         space_needed = 1 if current_line else 0
         if current_len + len(word) + space_needed <= cols:
@@ -242,11 +296,13 @@ def build_puzzle_board():
             lines.append(" ".join(current_line))
             current_line = [word]
             current_len = len(word)
+            
     if current_line:
         lines.append(" ".join(current_line))
 
     show_category = len(lines) < rows
     board = [[0]*cols for _ in range(rows)]
+    
     for row_idx, line in enumerate(lines):
         if row_idx >= rows - (1 if show_category else 0):
             break 
@@ -263,55 +319,170 @@ def build_puzzle_board():
         cat_str = wheel_state["category_name"][:cols].center(cols)
         for j, char in enumerate(cat_str):
              board[rows-1][j] = VB_CHARS.get(char, 0)
+             
     return board
+
+@app.route('/api/wheel/state', methods=['GET'])
+def wheel_get_state():
+    return jsonify(wheel_state)
+
+@app.route('/api/wheel/join', methods=['POST'])
+def wheel_join():
+    if wheel_state["status"] != "lobby":
+        return jsonify({"status": "error", "message": "Game already in progress!"}), 400
+        
+    player_name = request.json.get("name", "Player").upper()[:10]
+    player_id = str(uuid.uuid4())
+    
+    wheel_state["players"].append({
+        "id": player_id,
+        "name": player_name,
+        "score": 0
+    })
+    
+    return jsonify({"status": "success", "player_id": player_id})
 
 @app.route('/api/wheel/start', methods=['POST'])
 def wheel_start():
+    if len(wheel_state["players"]) == 0:
+        return jsonify({"status": "error", "message": "Need at least 1 player"}), 400
+        
     cat_file = request.json.get('category', 'random')
     cat_name, _ = load_random_puzzle(cat_file)
-    try:
-        board = build_puzzle_board()
-        send_to_vestaboard(board)
-        return jsonify({"status": "success", "category": cat_name})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/wheel/guess', methods=['POST'])
-def wheel_guess():
-    letter = request.json.get('letter', '').upper()
-    wheel_state["revealed_letters"].add(letter)
-    found = letter in wheel_state["answer"]
-    try:
-        board = build_puzzle_board()
-        send_to_vestaboard(board)
-        return jsonify({"status": "success", "found": found})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/wheel/reveal_random', methods=['POST'])
-def wheel_reveal_random():
-    answer = wheel_state["answer"]
-    unrevealed = set(char for char in answer if char.isalpha() and char not in wheel_state["revealed_letters"])
-    if not unrevealed:
-        return jsonify({"status": "complete"})
-    chosen_letter = random.choice(list(unrevealed))
-    wheel_state["revealed_letters"].add(chosen_letter)
-    try:
-        board = build_puzzle_board()
-        send_to_vestaboard(board)
-        return jsonify({"status": "success", "letter": chosen_letter})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/wheel/solve', methods=['POST'])
-def wheel_solve():
-    wheel_state["revealed_letters"].update([chr(i) for i in range(65, 91)])
+    
+    for p in wheel_state["players"]:
+        p["score"] = 0
+        
+    wheel_state["status"] = "playing"
+    wheel_state["current_turn"] = 0
+    wheel_state["turn_id"] += 1
+    
+    # Initialize the first player's turn loop
+    player = wheel_state["players"][0]
+    if player["score"] >= 250:
+        wheel_state["phase"] = "choice"
+        wheel_state["message"] = f"Game started! {player['name']}'s turn. Spin or Buy a Vowel?"
+    else:
+        roll_wheel("Game started!")
+    
     try:
         board = build_puzzle_board()
         send_to_vestaboard(board)
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/wheel/action', methods=['POST'])
+def wheel_action():
+    if wheel_state["status"] != "playing":
+        return jsonify({"status": "error"}), 400
+        
+    action = request.json.get('action')
+    player_id = request.json.get('player_id')
+    current_player = wheel_state["players"][wheel_state["current_turn"]]
+    
+    if player_id != current_player["id"]:
+        return jsonify({"status": "error"}), 403
+        
+    if action == "spin":
+        roll_wheel()
+    elif action == "buy_vowel":
+        wheel_state["phase"] = "vowel"
+        wheel_state["message"] = f"{current_player['name']} is buying a vowel. Pick a vowel!"
+        wheel_state["turn_id"] += 1
+        
+    return jsonify({"status": "success"})
+
+@app.route('/api/wheel/guess', methods=['POST'])
+def wheel_guess():
+    if wheel_state["status"] != "playing":
+        return jsonify({"status": "error", "message": "Game not active"}), 400
+        
+    letter = request.json.get('letter', '').upper()
+    player_id = request.json.get('player_id')
+    
+    current_player = wheel_state["players"][wheel_state["current_turn"]]
+    if player_id != current_player["id"]:
+        return jsonify({"status": "error", "message": "Not your turn!"}), 403
+
+    if letter in wheel_state["revealed_letters"]:
+        return jsonify({"status": "error", "message": "Letter already guessed"}), 400
+        
+    is_vowel = letter in ['A', 'E', 'I', 'O', 'U']
+    
+    if is_vowel and wheel_state["phase"] != "vowel":
+         return jsonify({"status": "error", "message": "Cannot guess a vowel right now"}), 400
+    if not is_vowel and wheel_state["phase"] != "spin":
+         return jsonify({"status": "error", "message": "Cannot guess a consonant right now"}), 400
+
+    count = wheel_state["answer"].count(letter)
+    wheel_state["revealed_letters"].append(letter)
+    
+    if is_vowel:
+        if current_player["score"] < 250:
+            wheel_state["revealed_letters"].remove(letter)
+            return jsonify({"status": "error", "message": "Not enough money for a vowel"}), 400
+            
+        current_player["score"] -= 250
+        
+        if count > 0:
+            continue_turn(f"Correct! {count} '{letter}'(s).")
+        else:
+            advance_wheel_turn(f"Sorry, no '{letter}'s.")
+    else:
+        if count > 0:
+            earned = count * wheel_state["spin_value"]
+            current_player["score"] += earned
+            continue_turn(f"Awesome! {count} '{letter}'(s) for ${earned}!")
+        else:
+            advance_wheel_turn(f"Bummer. No '{letter}'s.")
+            
+    wheel_state["turn_id"] += 1
+            
+    try:
+        board = build_puzzle_board()
+        send_to_vestaboard(board)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/wheel/solve', methods=['POST'])
+def wheel_solve():
+    player_id = request.json.get('player_id')
+    
+    # Reveal all remaining alphabet characters
+    for i in range(65, 91):
+        if chr(i) not in wheel_state["revealed_letters"]:
+            wheel_state["revealed_letters"].append(chr(i))
+            
+    wheel_state["status"] = "game_over"
+    
+    winner_name = "Someone"
+    if player_id:
+        for p in wheel_state["players"]:
+            if p["id"] == player_id:
+                winner_name = p["name"]
+                break
+                
+    wheel_state["message"] = f"{winner_name} solved the puzzle!"
+            
+    try:
+        board = build_puzzle_board()
+        send_to_vestaboard(board)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/wheel/end', methods=['POST'])
+def wheel_end():
+    wheel_state["status"] = "lobby"
+    wheel_state["players"] = []
+    wheel_state["current_turn"] = 0
+    wheel_state["answer"] = ""
+    wheel_state["revealed_letters"] = []
+    wheel_state["message"] = "Waiting to start..."
+    wheel_state["turn_id"] += 1
+    return jsonify({"status": "success"})
 
 
 # --- SCOREBOARD LOGIC ---

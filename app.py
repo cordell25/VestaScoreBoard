@@ -220,11 +220,20 @@ wheel_state = {
     "spin_value": None,
     "message": "Waiting to start...",
     "turn_id": 0,
-    "phase": "choice"
+    "phase": "choice",
+    "timer_seconds": 12
 }
 
+def get_next_valid_player_index():
+    idx = wheel_state["current_turn"]
+    for _ in range(len(wheel_state["players"])):
+        idx = (idx + 1) % len(wheel_state["players"])
+        if not wheel_state["players"][idx].get("eliminated", False):
+            return idx
+    return idx 
+
 def advance_wheel_turn(prefix_msg=""):
-    wheel_state["current_turn"] = (wheel_state["current_turn"] + 1) % len(wheel_state["players"])
+    wheel_state["current_turn"] = get_next_valid_player_index()
     wheel_state["turn_id"] += 1
     
     player = wheel_state["players"][wheel_state["current_turn"]]
@@ -322,6 +331,9 @@ def build_puzzle_board():
              
     return board
 
+def strip_formatting(text):
+    return "".join(c for c in text if c.isalnum())
+
 @app.route('/api/wheel/state', methods=['GET'])
 def wheel_get_state():
     return jsonify(wheel_state)
@@ -337,7 +349,9 @@ def wheel_join():
     wheel_state["players"].append({
         "id": player_id,
         "name": player_name,
-        "score": 0
+        "score": 0,
+        "bank_score": 0,
+        "eliminated": False
     })
     
     return jsonify({"status": "success", "player_id": player_id})
@@ -348,10 +362,14 @@ def wheel_start():
         return jsonify({"status": "error", "message": "Need at least 1 player"}), 400
         
     cat_file = request.json.get('category', 'random')
+    timer_seconds = request.json.get('timer_seconds', 12)
+    wheel_state["timer_seconds"] = int(timer_seconds)
+    
     cat_name, _ = load_random_puzzle(cat_file)
     
     for p in wheel_state["players"]:
         p["score"] = 0
+        p["eliminated"] = False
         
     wheel_state["status"] = "playing"
     wheel_state["current_turn"] = 0
@@ -390,6 +408,19 @@ def wheel_action():
         wheel_state["phase"] = "vowel"
         wheel_state["message"] = f"{current_player['name']} is buying a vowel. Pick a vowel!"
         wheel_state["turn_id"] += 1
+        
+    return jsonify({"status": "success"})
+
+@app.route('/api/wheel/timeout', methods=['POST'])
+def wheel_timeout():
+    if wheel_state["status"] != "playing":
+        return jsonify({"status": "error"}), 400
+        
+    player_id = request.json.get("player_id")
+    current_player = wheel_state["players"][wheel_state["current_turn"]]
+    
+    if player_id == current_player["id"]:
+        advance_wheel_turn(f"Time's up for {current_player['name']}!")
         
     return jsonify({"status": "success"})
 
@@ -448,23 +479,50 @@ def wheel_guess():
 
 @app.route('/api/wheel/solve', methods=['POST'])
 def wheel_solve():
+    if wheel_state["status"] != "playing":
+        return jsonify({"status": "error"}), 400
+        
     player_id = request.json.get('player_id')
+    guess = request.json.get('guess', '').upper()
+    current_player = wheel_state["players"][wheel_state["current_turn"]]
     
-    # Reveal all remaining alphabet characters
-    for i in range(65, 91):
-        if chr(i) not in wheel_state["revealed_letters"]:
-            wheel_state["revealed_letters"].append(chr(i))
-            
-    wheel_state["status"] = "game_over"
-    
-    winner_name = "Someone"
-    if player_id:
-        for p in wheel_state["players"]:
-            if p["id"] == player_id:
-                winner_name = p["name"]
-                break
+    if player_id != current_player["id"]:
+        return jsonify({"status": "error"}), 403
+
+    actual = strip_formatting(wheel_state["answer"])
+    guess_clean = strip_formatting(guess)
+
+    if guess_clean == actual:
+        # Reveal all letters
+        for i in range(65, 91):
+            if chr(i) not in wheel_state["revealed_letters"]:
+                wheel_state["revealed_letters"].append(chr(i))
                 
-    wheel_state["message"] = f"{winner_name} solved the puzzle!"
+        current_player["bank_score"] += current_player["score"]
+        wheel_state["status"] = "game_over"
+        wheel_state["message"] = f"Correct! {current_player['name']} solved it and banked ${current_player['score']}!"
+    else:
+        current_player["eliminated"] = True
+        active_players = [p for p in wheel_state["players"] if not p.get("eliminated")]
+        
+        if len(active_players) == 1 and len(wheel_state["players"]) > 1:
+            winner = active_players[0]
+            winner["bank_score"] += winner["score"]
+            wheel_state["status"] = "game_over"
+            for i in range(65, 91):
+                if chr(i) not in wheel_state["revealed_letters"]:
+                    wheel_state["revealed_letters"].append(chr(i))
+            wheel_state["message"] = f"Incorrect! {current_player['name']} is out. {winner['name']} wins by default and banks ${winner['score']}!"
+        elif len(active_players) == 0:
+            wheel_state["status"] = "game_over"
+            for i in range(65, 91):
+                if chr(i) not in wheel_state["revealed_letters"]:
+                    wheel_state["revealed_letters"].append(chr(i))
+            wheel_state["message"] = "Incorrect! Everyone is out. The game is over."
+        else:
+            advance_wheel_turn(f"Incorrect guess by {current_player['name']}! They are out.")
+
+    wheel_state["turn_id"] += 1
             
     try:
         board = build_puzzle_board()
@@ -473,8 +531,25 @@ def wheel_solve():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/api/wheel/reset', methods=['POST'])
+def wheel_reset():
+    # Return to lobby but keep players and their bank scores
+    wheel_state["status"] = "lobby"
+    wheel_state["current_turn"] = 0
+    wheel_state["answer"] = ""
+    wheel_state["revealed_letters"] = []
+    wheel_state["message"] = "Waiting to start..."
+    wheel_state["turn_id"] += 1
+    
+    for p in wheel_state["players"]:
+        p["score"] = 0
+        p["eliminated"] = False
+        
+    return jsonify({"status": "success"})
+
 @app.route('/api/wheel/end', methods=['POST'])
 def wheel_end():
+    # Hard end, clear players
     wheel_state["status"] = "lobby"
     wheel_state["players"] = []
     wheel_state["current_turn"] = 0
